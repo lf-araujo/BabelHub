@@ -23,8 +23,9 @@ console.log(`Python blocks rendered: ${pyBlocks}`);
 console.log(`Run buttons attached:  ${runButtons}`);
 console.log(`Result slots attached: ${resultSlots}`);
 
-// Run buttons should appear on every R block and no others.
-const ok = rBlocks > 0 && runButtons === rBlocks && resultSlots === rBlocks && pyBlocks >= 1;
+// Run buttons should appear on every runnable block (R + Python) and no others.
+const runnable = rBlocks + pyBlocks;
+const ok = runnable > 0 && runButtons === runnable && resultSlots === runnable;
 
 // Idempotency: a second pass (as happens on re-render of the same node) must
 // not double up buttons.
@@ -32,5 +33,5 @@ attachRunButtons(preview);
 const afterSecondPass = preview.querySelectorAll('button.run-btn').length;
 console.log(`Run buttons after 2nd pass: ${afterSecondPass}`);
 
-console.log(ok && afterSecondPass === rBlocks ? '\nPASS' : '\nFAIL');
-process.exit(ok && afterSecondPass === rBlocks ? 0 : 1);
+console.log(ok && afterSecondPass === runnable ? '\nPASS' : '\nFAIL');
+process.exit(ok && afterSecondPass === runnable ? 0 : 1);

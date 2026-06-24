@@ -17,6 +17,6 @@ export default defineConfig({
     proxy: { '/api': 'http://localhost:8080' },
   },
   preview: { headers: crossOriginIsolation },
-  // webr ships a worker that Vite would otherwise try to pre-bundle and choke on.
-  optimizeDeps: { exclude: ['webr'] },
+  // webr and pyodide ship workers/wasm loaders that Vite shouldn't pre-bundle.
+  optimizeDeps: { exclude: ['webr', 'pyodide'] },
 });

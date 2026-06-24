@@ -13,17 +13,21 @@ A split-pane web app:
 - *Left*: a [[https://codemirror.net/][CodeMirror 6]] editor with a lightweight org-mode highlighter.
 - *Right*: a live preview, parsed by [[https://github.com/rasmusbe/uniorg][uniorg]] (the same parser model as
   org-element.el — we don't roll our own).
-- Each R source block gets a *▶ Run* button. Clicking it boots webR (~30MB,
-  downloaded lazily on first run, never at page load) and shows captured
-  output *and any plots*, rendered inline.
+- R and Python source blocks each get a *▶ Run* button. R runs via [[https://webr.r-wasm.org][webR]] and
+  Python via [[https://pyodide.org][Pyodide]] — both client-side WASM runtimes, downloaded lazily on
+  first Run (never at page load). Captured output *and plots* (R graphics,
+  matplotlib figures) render inline. Each language shares one session across
+  blocks, and the demo sets ~#+PROPERTY: header-args~ ~:session~ so the same
+  files behave identically when opened in Emacs.
 
 Documents *save and load* via the toolbar: each save writes the ~.org~ file to
 a git-backed store on the server and commits it, so you get version history for
 free. Storage lives under ~$BABELHUB_DATA~ (default ~./data~); the server needs
 ~git~ on the host.
 
-Other languages render but aren't runnable yet — that's the boundary between
-the free webR tier and the future containerised-execution paid tier.
+Heavier code (compiled R packages, non-Python/R languages, long jobs) isn't
+runnable client-side — that's the boundary with the future containerised-
+execution paid tier.
 
 The whole thing ships as a *single static Nim binary*: ~src/server~ embeds the
 built frontend at compile time, so deployment is one ~scp~ — no Node, no
@@ -132,7 +136,7 @@ Sequenced cheapest-first, each step independently shippable.
 - [X] Capture and inline plots (webR graphics device → canvas)
 - [X] Single static Nim binary serving the embedded site
 - [X] Save/load documents via git-backed storage
-- [ ] Python execution via Pyodide (next)
+- [X] Python execution via Pyodide (stdout + matplotlib figures)
 - [ ] Org-aware diff view (heading/subtree level, not line-based)
 
 ** Tier 2 — still serverless-ish

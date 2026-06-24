@@ -1,13 +1,17 @@
 #+TITLE: BabelHub demo
+#+PROPERTY: header-args:R :session *R* :results output
+#+PROPERTY: header-args:python :session *py* :results output
 
 * Welcome to BabelHub
 
 This is an org-mode document rendered live in your browser. Edit the source on
 the left; the preview updates as you type.
 
-Unlike a static GitHub render, the R source blocks below are *runnable* — the
-code executes client-side via [[https://webr.r-wasm.org][webR]], so it costs the
-server nothing.
+Unlike a static GitHub render, the source blocks below are *runnable* — R runs
+client-side via [[https://webr.r-wasm.org][webR]] and Python via [[https://pyodide.org][Pyodide]], so execution costs the
+server nothing. The =#+PROPERTY: header-args= lines above set a shared
+~:session~ per language, so when you open this file in Emacs the blocks run in
+one persistent session too.
 
 ** A first computation
 
@@ -31,15 +35,36 @@ hist(rnorm(1000), col = "#2f7d5b", border = "white",
      main = "1000 draws from N(0,1)")
 #+end_src
 
-** Other languages render, but only R runs (for now)
+** Python runs too
 
 #+begin_src python
-print("This block renders, but has no Run button yet.")
+import sys
+print("Python", sys.version.split()[0], "in the browser")
+print(sum(range(101)))
+#+end_src
+
+Because each language shares one session, a later block sees earlier state:
+
+#+begin_src python
+xs = [x * x for x in range(10)]
+xs
+#+end_src
+
+Imported packages (numpy, pandas, matplotlib, …) auto-load on first use, and
+matplotlib figures are captured inline:
+
+#+begin_src python
+import matplotlib.pyplot as plt
+import numpy as np
+plt.plot(np.cumsum(np.random.randn(200)))
+plt.title("a random walk")
+plt.show()
 #+end_src
 
 * What's next
 
 - [X] CodeMirror editor with org syntax highlighting
 - [X] Inline plots
-- [ ] Save/load via Git-backed storage
+- [X] Save/load via Git-backed storage
+- [X] Python execution via Pyodide
 - [ ] Containerised execution for heavier, non-webR workloads

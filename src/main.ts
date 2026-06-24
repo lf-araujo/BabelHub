@@ -17,6 +17,14 @@ setRunStatusHandler((text) => {
   status.textContent = text;
 });
 
+// New documents start session-ready, so they behave the same in Emacs.
+const NEW_TEMPLATE = `#+TITLE: Untitled
+#+PROPERTY: header-args:R :session *R* :results output
+#+PROPERTY: header-args:python :session *py* :results output
+
+*
+`;
+
 // --- document state -------------------------------------------------------
 let currentSlug: string | null = null; // null = unsaved scratch buffer
 let current = sampleOrg;
@@ -67,8 +75,8 @@ docList.addEventListener('change', async () => {
 
 docNew.addEventListener('click', () => {
   currentSlug = null;
-  current = '';
-  setEditorContent(view, '');
+  current = NEW_TEMPLATE;
+  setEditorContent(view, NEW_TEMPLATE);
   docList.value = '';
   dirty = false;
   showName();

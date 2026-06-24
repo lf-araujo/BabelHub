@@ -1,10 +1,9 @@
 import type { WebR } from 'webr';
+import type { PyodideInterface } from 'pyodide';
 
-// A single lazily-initialised webR instance, shared across every Run button on
-// the page. The `webr` module itself is dynamically imported on first Run, so
-// neither the ~30MB R runtime nor its worker code touch page load — the whole
-// point of client-side execution.
-let webRPromise: Promise<WebR> | null = null;
+// Both runtimes run client-side in the visitor's browser, so executing code
+// costs the server nothing. Each is dynamically imported on first Run, so
+// neither heavy runtime touches page load.
 
 type StatusFn = (text: string) => void;
 let onStatus: StatusFn = () => {};
@@ -12,6 +11,14 @@ let onStatus: StatusFn = () => {};
 export function setRunStatusHandler(fn: StatusFn): void {
   onStatus = fn;
 }
+
+interface RunResult {
+  text: string;
+  images: (ImageBitmap | string)[]; // ImageBitmap (webR) or PNG data URL (matplotlib)
+}
+
+// --- R via webR -----------------------------------------------------------
+let webRPromise: Promise<WebR> | null = null;
 
 function getWebR(): Promise<WebR> {
   if (!webRPromise) {
@@ -26,22 +33,13 @@ function getWebR(): Promise<WebR> {
   return webRPromise;
 }
 
-interface RunResult {
-  text: string;
-  images: ImageBitmap[];
-}
-
-/** Run R source, returning combined stream text plus any plots drawn. */
 async function runR(code: string): Promise<RunResult> {
   const webR = await getWebR();
   const shelter = await new webR.Shelter();
   try {
-    // withAutoprint makes top-level visible values print like a REPL would —
-    // otherwise `sprintf(...)` or `summary(...)` returns a value but emits
-    // nothing, and the user just sees "(no output)".
+    // withAutoprint makes top-level visible values print like a REPL would.
     // captureConditions:false lets R errors surface as thrown exceptions (our
-    // catch renders them), while warnings/messages still land on the streams.
-    // captureGraphics is on by default: any plot() lands in `images`.
+    // catch renders them). captureGraphics is on by default: plots land in `images`.
     const { output, images } = await shelter.captureR(code, {
       withAutoprint: true,
       captureStreams: true,
@@ -58,16 +56,90 @@ async function runR(code: string): Promise<RunResult> {
   }
 }
 
+// --- Python via Pyodide ---------------------------------------------------
+// Keep this version in sync with pyodide in package.json; the loader requires a
+// matching CDN folder.
+const PYODIDE_INDEX_URL = 'https://cdn.jsdelivr.net/pyodide/v314.0.0/full/';
+let pyodidePromise: Promise<PyodideInterface> | null = null;
+
+function getPyodide(): Promise<PyodideInterface> {
+  if (!pyodidePromise) {
+    onStatus('Python: downloading runtime…');
+    pyodidePromise = import('pyodide').then(async ({ loadPyodide }) => {
+      const py = await loadPyodide({ indexURL: PYODIDE_INDEX_URL });
+      // Force a non-interactive matplotlib backend so plt.show() is a no-op and
+      // figures can be grabbed with savefig (set before any import of matplotlib).
+      await py.runPythonAsync('import os; os.environ.setdefault("MPLBACKEND", "AGG")');
+      onStatus('Python: ready');
+      return py;
+    });
+  }
+  return pyodidePromise;
+}
+
+// Run after user code: if matplotlib was used, return open figures as base64 PNGs.
+const MPL_CAPTURE = `
+import sys, io, base64
+_bh_imgs = []
+if 'matplotlib.pyplot' in sys.modules:
+    import matplotlib.pyplot as _plt
+    for _n in _plt.get_fignums():
+        _b = io.BytesIO()
+        _plt.figure(_n).savefig(_b, format='png', bbox_inches='tight')
+        _bh_imgs.append(base64.b64encode(_b.getvalue()).decode())
+    _plt.close('all')
+_bh_imgs
+`;
+
+async function runPython(code: string): Promise<RunResult> {
+  const py = await getPyodide();
+  let buf = '';
+  const sink = { batched: (s: string) => { buf += s + '\n'; } };
+  py.setStdout(sink);
+  py.setStderr(sink);
+  try {
+    await py.loadPackagesFromImports(code); // auto-load numpy/pandas/matplotlib/…
+    const result = await py.runPythonAsync(code);
+    if (result !== undefined && result !== null) {
+      const repr = String(result);
+      if (repr) buf += repr + '\n';
+      (result as { destroy?: () => void })?.destroy?.();
+    }
+    let images: (ImageBitmap | string)[] = [];
+    try {
+      const figs = await py.runPythonAsync(MPL_CAPTURE);
+      const arr = (figs?.toJs?.() ?? []) as string[];
+      images = arr.map((b64) => `data:image/png;base64,${b64}`);
+      figs?.destroy?.();
+    } catch {
+      /* matplotlib not used or capture failed — keep the text output */
+    }
+    return { text: buf.trimEnd(), images };
+  } finally {
+    py.setStdout({});
+    py.setStderr({});
+  }
+}
+
+// --- dispatch -------------------------------------------------------------
+type Runtime = 'r' | 'python';
+
+function runtimeFor(lang: string): Runtime | null {
+  if (lang === 'r' || lang === 'ess-r') return 'r';
+  if (lang === 'python' || lang === 'py' || lang === 'jupyter-python') return 'python';
+  return null;
+}
+
 /**
- * Find every R source block in `root` and attach a Run button. uniorg renders
- * src blocks as <pre class="src-block"><code class="language-R">…</code></pre>;
- * org accepts R, r, ess-R, etc. as the language, so we match case-insensitively.
+ * Attach a Run button to every R or Python source block in `root`. uniorg
+ * renders src blocks as <pre class="src-block"><code class="language-X">…</code>.
  */
 export function attachRunButtons(root: ParentNode): void {
   const blocks = root.querySelectorAll<HTMLElement>('pre.src-block > code[class*="language-"]');
   for (const code of Array.from(blocks)) {
     const lang = (code.className.match(/language-([\w-]+)/)?.[1] ?? '').toLowerCase();
-    if (lang !== 'r' && lang !== 'ess-r') continue;
+    const runtime = runtimeFor(lang);
+    if (!runtime) continue;
 
     const pre = code.parentElement as HTMLElement;
     if (pre.dataset.runnable) continue; // idempotent across re-renders
@@ -90,7 +162,8 @@ export function attachRunButtons(root: ParentNode): void {
       const original = button.textContent;
       button.textContent = '… running';
       try {
-        const { text, images } = await runR(code.textContent ?? '');
+        const exec = runtime === 'r' ? runR : runPython;
+        const { text, images } = await exec(code.textContent ?? '');
         result.textContent = text || (images.length ? '' : '(no output)');
         result.hidden = text.length === 0;
         result.classList.remove('run-error');
@@ -112,16 +185,23 @@ export function attachRunButtons(root: ParentNode): void {
   }
 }
 
-/** Paint webR's captured plots (ImageBitmaps) into `container` as canvases. */
-function renderPlots(container: HTMLElement, images: ImageBitmap[]): void {
+/** Paint captured plots — canvases for webR ImageBitmaps, <img> for PNG URLs. */
+function renderPlots(container: HTMLElement, images: (ImageBitmap | string)[]): void {
   container.replaceChildren();
-  for (const bmp of images) {
-    const canvas = document.createElement('canvas');
-    canvas.className = 'run-plot';
-    canvas.width = bmp.width;
-    canvas.height = bmp.height;
-    canvas.getContext('2d')?.drawImage(bmp, 0, 0);
-    container.appendChild(canvas);
+  for (const img of images) {
+    if (typeof img === 'string') {
+      const el = document.createElement('img');
+      el.className = 'run-plot';
+      el.src = img;
+      container.appendChild(el);
+    } else {
+      const canvas = document.createElement('canvas');
+      canvas.className = 'run-plot';
+      canvas.width = img.width;
+      canvas.height = img.height;
+      canvas.getContext('2d')?.drawImage(img, 0, 0);
+      container.appendChild(canvas);
+    }
   }
   container.hidden = images.length === 0;
 }
