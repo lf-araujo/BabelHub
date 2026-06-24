@@ -65,6 +65,35 @@ without it the editor still works as a scratch pad.
 
 Slugs are ~[A-Za-z0-9_-]{1,64}~ (which also blocks path traversal).
 
+* Container execution (Tier 3 — opt-in)
+
+For languages webR/Pyodide can't run (bash, julia, node, …), the backend can
+execute a block in an ephemeral, sandboxed container and stream back the output.
+It is *off by default*; enable with ~BABELHUB_EXEC=1~:
+
+#+begin_src sh
+nimble images                                 # pre-pull the sandbox images (once)
+BABELHUB_EXEC=1 PORT=8080 ./babelhub          # then blocks get a "Run (container)" button
+#+end_src
+
+Every run is locked down: ~--network none~, ~--memory~/~--cpus~/~--pids-limit~
+caps, ~--read-only~ rootfs + small tmpfs, ~--cap-drop ALL~,
+~--security-opt no-new-privileges~, a hard ~BABELHUB_EXEC_TIMEOUT~ (default 30s),
+and a ~BABELHUB_EXEC_MAX~ concurrency cap (default 4). Code is fed on stdin.
+Because the sandbox has no network, images are never pulled at run time — hence
+~nimble images~.
+
+⚠️ *Security:* this runs untrusted code. The sandbox is strong, but a *public*
+deployment must add authentication, rate limiting, and abuse monitoring before
+enabling it. Treat ~BABELHUB_EXEC=1~ as "trusted users only" for now. The server
+also needs access to the Docker socket (so run it where that's acceptable).
+
+API: ~GET /api/exec~ → ~{"enabled", "languages"}~; ~POST /api/exec~ with
+~{"lang","code"}~ → ~{"ok","output"}~ (403 when disabled).
+
+Config knobs: ~BABELHUB_EXEC~, ~BABELHUB_EXEC_TIMEOUT~, ~BABELHUB_EXEC_MEM~,
+~BABELHUB_EXEC_CPUS~, ~BABELHUB_EXEC_MAX~.
+
 * Ship it (single binary)
 
 ~nimble build~ produces ~./babelhub~ — the frontend is embedded, so that one
@@ -122,6 +151,7 @@ container-per-block backend later without rework.
 | ~scripts/probe.ts~  | jsdom verification of the render+run wiring      |
 | ~server/babelhub.nim~ | Nim server; embeds dist/ → single binary      |
 | ~server/storage.nim~ | git-backed document store + API                |
+| ~server/exec.nim~   | sandboxed container execution (Tier 3, opt-in)  |
 | ~babelhub.nimble~   | one entry point: build/run/install/docker tasks |
 | ~Dockerfile~        | self-contained image build                      |
 | ~server/deploy/~    | systemd unit + Caddyfile for the Hetzner box    |

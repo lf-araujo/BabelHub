@@ -1,5 +1,5 @@
 import { renderOrg } from './render';
-import { attachRunButtons, setRunStatusHandler } from './run';
+import { attachRunButtons, setRunStatusHandler, loadExecCaps } from './run';
 import { createEditor, setEditorContent } from './editor';
 import * as store from './storage';
 import './style.css';
@@ -110,3 +110,6 @@ docSave.addEventListener('click', async () => {
 
 void render();
 void refreshList();
+// Once we know whether the backend offers container execution, re-render so
+// any server-runnable blocks (bash, julia, …) pick up a Run button.
+void loadExecCaps().then(render);

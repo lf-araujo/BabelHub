@@ -45,6 +45,11 @@ task staticbin, "Build a fully-static musl binary (for a scratch container)":
 task docker, "Build the container image (self-contained; needs only Docker)":
   exec "docker build -t babelhub ."
 
+task images, "Pre-pull the sandbox images used by container execution":
+  # The exec sandbox runs with --network none, so images must already be local.
+  for img in ["alpine:3", "bash:5", "julia:1", "node:20-slim"]:
+    exec "docker pull " & img
+
 task drun, "Build image, then (re)launch the container on :8080 with a data volume":
   dockerTask()
   # `docker run` never replaces an existing container, so remove the old one

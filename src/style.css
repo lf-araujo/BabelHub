@@ -92,6 +92,8 @@ body {
   cursor: pointer;
 }
 .run-btn:disabled { opacity: 0.6; cursor: default; }
+/* container-run button reads differently from the free client-side Run */
+.run-btn:not(:disabled):is([data-server]) { background: #8a5a2b; border-color: #8a5a2b; }
 
 .run-result {
   background: #0e1f17;

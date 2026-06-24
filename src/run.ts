@@ -121,6 +121,35 @@ async function runPython(code: string): Promise<RunResult> {
   }
 }
 
+// --- server execution (containerised, paid tier) --------------------------
+interface ExecCaps {
+  enabled: boolean;
+  languages: string[];
+}
+let execCaps: ExecCaps = { enabled: false, languages: [] };
+
+/** Ask the backend whether container execution is on, and for which languages. */
+export async function loadExecCaps(): Promise<void> {
+  try {
+    const r = await fetch('/api/exec');
+    if (r.ok) execCaps = (await r.json()) as ExecCaps;
+  } catch {
+    /* backend unreachable — server execution simply stays unavailable */
+  }
+}
+
+async function runOnServer(lang: string, code: string): Promise<RunResult> {
+  const r = await fetch('/api/exec', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ lang, code }),
+  });
+  if (!r.ok) throw new Error(`server exec failed (${r.status})`);
+  const data = (await r.json()) as { ok: boolean; output: string };
+  if (!data.ok) throw new Error(data.output);
+  return { text: data.output, images: [] };
+}
+
 // --- dispatch -------------------------------------------------------------
 type Runtime = 'r' | 'python';
 
@@ -138,8 +167,11 @@ export function attachRunButtons(root: ParentNode): void {
   const blocks = root.querySelectorAll<HTMLElement>('pre.src-block > code[class*="language-"]');
   for (const code of Array.from(blocks)) {
     const lang = (code.className.match(/language-([\w-]+)/)?.[1] ?? '').toLowerCase();
-    const runtime = runtimeFor(lang);
-    if (!runtime) continue;
+    const runtime = runtimeFor(lang); // client-side: webR / Pyodide
+    // Server-side container execution covers other languages (and only when the
+    // backend has it enabled). Client runtimes win when both could apply.
+    const onServer = !runtime && execCaps.enabled && execCaps.languages.includes(lang);
+    if (!runtime && !onServer) continue;
 
     const pre = code.parentElement as HTMLElement;
     if (pre.dataset.runnable) continue; // idempotent across re-renders
@@ -147,7 +179,8 @@ export function attachRunButtons(root: ParentNode): void {
 
     const button = document.createElement('button');
     button.className = 'run-btn';
-    button.textContent = '▶ Run';
+    button.textContent = onServer ? '▶ Run (container)' : '▶ Run';
+    if (onServer) button.dataset.server = '';
 
     const result = document.createElement('pre');
     result.className = 'run-result';
@@ -162,8 +195,11 @@ export function attachRunButtons(root: ParentNode): void {
       const original = button.textContent;
       button.textContent = '… running';
       try {
-        const exec = runtime === 'r' ? runR : runPython;
-        const { text, images } = await exec(code.textContent ?? '');
+        const src = code.textContent ?? '';
+        const exec = runtime === 'r' ? runR
+          : runtime === 'python' ? runPython
+          : (s: string) => runOnServer(lang, s);
+        const { text, images } = await exec(src);
         result.textContent = text || (images.length ? '' : '(no output)');
         result.hidden = text.length === 0;
         result.classList.remove('run-error');

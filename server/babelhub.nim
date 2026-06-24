@@ -8,8 +8,8 @@
 ## channel, so every response carries the COOP/COEP headers. A TLS terminator
 ## (Caddy) sits in front; this process speaks plain HTTP on $PORT.
 
-import std/[asynchttpserver, asyncdispatch, os, strutils, tables]
-import storage
+import std/[asynchttpserver, asyncdispatch, os, strutils, tables, json]
+import storage, exec
 
 const distDir = normalizedPath(currentSourcePath().parentDir / ".." / "dist")
 
@@ -64,6 +64,31 @@ proc handleApi(req: Request, route: string) {.async, gcsafe.} =
   ## Document storage API. GET /api/docs -> list; GET|PUT /api/docs/<slug>.
   if route == "/api/docs" and req.reqMethod == HttpGet:
     await req.respond(Http200, listDocsJson(), baseHeaders(jsonType))
+    return
+  if route == "/api/exec":
+    case req.reqMethod
+    of HttpGet:
+      # Capability probe: is server execution on, and for which languages.
+      await req.respond(Http200, capsJson(), baseHeaders(jsonType))
+    of HttpPost:
+      if not execEnabled():
+        await req.respond(Http403, """{"error":"server execution disabled"}""",
+                          baseHeaders(jsonType))
+        return
+      var lang, code: string
+      try:
+        let body = parseJson(req.body)
+        lang = body{"lang"}.getStr
+        code = body{"code"}.getStr
+      except CatchableError:
+        await req.respond(Http400, """{"error":"bad request body"}""",
+                          baseHeaders(jsonType))
+        return
+      let (ok, output) = await runBlock(lang, code)
+      await req.respond(Http200, $(%*{"ok": ok, "output": output}),
+                        baseHeaders(jsonType))
+    else:
+      await req.respond(Http405, """{"error":"method not allowed"}""", baseHeaders(jsonType))
     return
   if route.startsWith("/api/docs/"):
     let slug = route["/api/docs/".len .. ^1]

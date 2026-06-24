@@ -61,10 +61,23 @@ plt.title("a random walk")
 plt.show()
 #+end_src
 
+** Other languages run in a container
+
+When the server has container execution enabled (~BABELHUB_EXEC=1~), blocks in
+languages webR/Pyodide can't handle get a *▶ Run (container)* button — each runs
+in a locked-down, throwaway container (no network, capped CPU/RAM, hard
+timeout).
+
+#+begin_src bash
+echo "running in a sandboxed container as $(whoami)"
+uname -sm
+#+end_src
+
 * What's next
 
 - [X] CodeMirror editor with org syntax highlighting
 - [X] Inline plots
 - [X] Save/load via Git-backed storage
 - [X] Python execution via Pyodide
-- [ ] Containerised execution for heavier, non-webR workloads
+- [X] Containerised execution for other languages (opt-in)
+- [ ] Persistent session containers (shared state across blocks)
