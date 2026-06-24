@@ -9,6 +9,7 @@
 ## (Caddy) sits in front; this process speaks plain HTTP on $PORT.
 
 import std/[asynchttpserver, asyncdispatch, os, strutils, tables]
+import storage
 
 const distDir = normalizedPath(currentSourcePath().parentDir / ".." / "dist")
 
@@ -57,8 +58,38 @@ proc baseHeaders(ctype: string): HttpHeaders =
     "Cross-Origin-Embedder-Policy": "require-corp",
   })
 
+const jsonType = "application/json"
+
+proc handleApi(req: Request, route: string) {.async, gcsafe.} =
+  ## Document storage API. GET /api/docs -> list; GET|PUT /api/docs/<slug>.
+  if route == "/api/docs" and req.reqMethod == HttpGet:
+    await req.respond(Http200, listDocsJson(), baseHeaders(jsonType))
+    return
+  if route.startsWith("/api/docs/"):
+    let slug = route["/api/docs/".len .. ^1]
+    if not validSlug(slug):
+      await req.respond(Http400, """{"error":"invalid name"}""", baseHeaders(jsonType))
+      return
+    case req.reqMethod
+    of HttpGet:
+      let (found, body) = readDoc(slug)
+      if found:
+        await req.respond(Http200, body, baseHeaders("text/plain; charset=utf-8"))
+      else:
+        await req.respond(Http404, """{"error":"not found"}""", baseHeaders(jsonType))
+    of HttpPut:
+      writeDoc(slug, req.body)
+      await req.respond(Http200, """{"ok":true}""", baseHeaders(jsonType))
+    else:
+      await req.respond(Http405, """{"error":"method not allowed"}""", baseHeaders(jsonType))
+    return
+  await req.respond(Http404, """{"error":"not found"}""", baseHeaders(jsonType))
+
 proc handle(req: Request) {.async, gcsafe.} =
   var route = req.url.path
+  if route.startsWith("/api/"):
+    await handleApi(req, route)
+    return
   if route.len == 0 or route == "/":
     route = "/index.html"
   let (found, body) = assetBody(route)
@@ -71,6 +102,7 @@ when isMainModule:
   if embedded.len == 0:
     stderr.writeLine "No embedded assets — run `npm run build` before compiling."
     quit 1
+  initStore()
   let port = Port(parseInt(getEnv("PORT", "8080")))
   let server = newAsyncHttpServer()
   echo "BabelHub serving ", embedded.len, " embedded assets on :", $port.uint16

@@ -8,10 +8,14 @@ After=network.target
 [Service]
 ExecStart=/usr/local/bin/babelhub
 Environment=PORT=8080
+# Documents are git-backed under this writable state dir (created by systemd,
+# owned by the dynamic user). Requires `git` installed on the host.
+StateDirectory=babelhub
+Environment=BABELHUB_DATA=/var/lib/babelhub
 DynamicUser=yes
 Restart=on-failure
 RestartSec=2
-# Hardening — the binary is self-contained and needs no filesystem access.
+# Hardening — only the state dir is writable.
 NoNewPrivileges=yes
 ProtectSystem=strict
 ProtectHome=yes

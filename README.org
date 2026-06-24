@@ -17,6 +17,11 @@ A split-pane web app:
   downloaded lazily on first run, never at page load) and shows captured
   output *and any plots*, rendered inline.
 
+Documents *save and load* via the toolbar: each save writes the ~.org~ file to
+a git-backed store on the server and commits it, so you get version history for
+free. Storage lives under ~$BABELHUB_DATA~ (default ~./data~); the server needs
+~git~ on the host.
+
 Other languages render but aren't runnable yet — that's the boundary between
 the free webR tier and the future containerised-execution paid tier.
 
@@ -44,6 +49,17 @@ also removes the frontend ~dist/~.)
 The dev server sends ~Cross-Origin-Opener-Policy~ / ~Cross-Origin-Embedder-Policy~
 headers so webR can use its fast SharedArrayBuffer channel; the production
 server sets them too. Any host in front (Caddy) must pass them through.
+
+Save/load talks to the backend at ~/api~. In dev, Vite proxies ~/api~ to
+~localhost:8080~, so run the binary alongside ~nimble dev~ to exercise storage;
+without it the editor still works as a scratch pad.
+
+** Document API
+- ~GET /api/docs~ → ~{"docs": [...]}~
+- ~GET /api/docs/<slug>~ → the ~.org~ text (404 if absent)
+- ~PUT /api/docs/<slug>~ (body = org text) → writes + commits
+
+Slugs are ~[A-Za-z0-9_-]{1,64}~ (which also blocks path traversal).
 
 * Ship it (single binary)
 
@@ -79,9 +95,11 @@ container-per-block backend later without rework.
 | ~src/run.ts~        | lazy webR boot + Run-button wiring              |
 | ~src/main.ts~       | editor ↔ debounced render ↔ buttons             |
 | ~src/editor.ts~     | CodeMirror + org StreamLanguage highlighter     |
+| ~src/storage.ts~    | client for the /api document store              |
 | ~public/sample.org~ | demo document loaded on first paint             |
 | ~scripts/probe.ts~  | jsdom verification of the render+run wiring      |
 | ~server/babelhub.nim~ | Nim server; embeds dist/ → single binary      |
+| ~server/storage.nim~ | git-backed document store + API                |
 | ~babelhub.nimble~   | one entry point: build/run/install/docker tasks |
 | ~Dockerfile~        | self-contained image build                      |
 | ~server/deploy/~    | systemd unit + Caddyfile for the Hetzner box    |
@@ -95,6 +113,8 @@ Sequenced cheapest-first, each step independently shippable.
 - [X] CodeMirror editor surface with org highlighting
 - [X] Capture and inline plots (webR graphics device → canvas)
 - [X] Single static Nim binary serving the embedded site
+- [X] Save/load documents via git-backed storage
+- [ ] Python execution via Pyodide (next)
 - [ ] Org-aware diff view (heading/subtree level, not line-based)
 
 ** Tier 2 — still serverless-ish

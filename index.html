@@ -8,7 +8,12 @@
   <body>
     <header id="topbar">
       <strong>BabelHub</strong>
-      <span class="tagline">org-mode + live R, in the browser</span>
+      <select id="doc-list" title="Open a document">
+        <option value="">— open —</option>
+      </select>
+      <button id="doc-new" title="Start a new document">New</button>
+      <button id="doc-save" title="Save to git storage">Save</button>
+      <span id="doc-name" class="docname">unsaved</span>
       <span id="webr-status" class="status">R: not started</span>
     </header>
     <main id="panes">

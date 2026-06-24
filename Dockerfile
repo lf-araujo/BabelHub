@@ -17,10 +17,15 @@ COPY server ./server
 COPY --from=web /app/dist ./dist
 RUN nim c -d:release --hints:off -o:/babelhub server/babelhub.nim
 
-# 3. Minimal runtime — the binary only links glibc + libm.
+# 3. Minimal runtime — the binary links glibc + libm and shells out to git.
 FROM debian:stable-slim
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends git ca-certificates \
+    && rm -rf /var/lib/apt/lists/* \
+    && mkdir -p /data && chown nobody:nogroup /data
 COPY --from=server /babelhub /usr/local/bin/babelhub
-ENV PORT=8080
+ENV PORT=8080 BABELHUB_DATA=/data
 EXPOSE 8080
+VOLUME /data
 USER nobody
 CMD ["babelhub"]

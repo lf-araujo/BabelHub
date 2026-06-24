@@ -77,6 +77,11 @@ const orgHighlight = HighlightStyle.define([
   { tag: t.link, color: '#2563a8', textDecoration: 'underline' },
 ]);
 
+/** Replace the editor's whole document (used when opening a saved doc). */
+export function setEditorContent(view: EditorView, text: string): void {
+  view.dispatch({ changes: { from: 0, to: view.state.doc.length, insert: text } });
+}
+
 export function createEditor(
   parent: HTMLElement,
   doc: string,

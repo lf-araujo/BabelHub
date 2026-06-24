@@ -8,3 +8,6 @@ dist/
 /babelhub.exe
 nimcache/
 
+# local document store (created at runtime when BABELHUB_DATA is unset)
+/data/
+

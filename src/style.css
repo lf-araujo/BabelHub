@@ -31,6 +31,20 @@ body {
 .tagline { color: var(--muted); font-size: 0.85rem; }
 .status { margin-left: auto; color: var(--muted); font-size: 0.8rem; font-variant-numeric: tabular-nums; }
 
+#topbar select,
+#topbar button {
+  font-size: 0.8rem;
+  padding: 0.2rem 0.6rem;
+  border: 1px solid var(--border);
+  border-radius: 5px;
+  background: #fff;
+  color: var(--fg);
+  cursor: pointer;
+}
+#topbar button:hover { border-color: var(--accent); color: var(--accent); }
+#topbar button:disabled { opacity: 0.5; cursor: default; }
+.docname { color: var(--muted); font-size: 0.8rem; font-style: italic; }
+
 #panes {
   display: grid;
   grid-template-columns: 1fr 1fr;
