@@ -1,0 +1,45 @@
+#+TITLE: BabelHub demo
+
+* Welcome to BabelHub
+
+This is an org-mode document rendered live in your browser. Edit the source on
+the left; the preview updates as you type.
+
+Unlike a static GitHub render, the R source blocks below are *runnable* — the
+code executes client-side via [[https://webr.r-wasm.org][webR]], so it costs the
+server nothing.
+
+** A first computation
+
+#+begin_src R
+x <- rnorm(1000, mean = 100, sd = 15)
+sprintf("n=%d  mean=%.2f  sd=%.2f", length(x), mean(x), sd(x))
+#+end_src
+
+** Output is captured too
+
+#+begin_src R
+summary(mtcars$mpg)
+#+end_src
+
+** Plots come back too
+
+Anything drawn to R's graphics device is captured and shown inline.
+
+#+begin_src R
+hist(rnorm(1000), col = "#2f7d5b", border = "white",
+     main = "1000 draws from N(0,1)")
+#+end_src
+
+** Other languages render, but only R runs (for now)
+
+#+begin_src python
+print("This block renders, but has no Run button yet.")
+#+end_src
+
+* What's next
+
+- [X] CodeMirror editor with org syntax highlighting
+- [X] Inline plots
+- [ ] Save/load via Git-backed storage
+- [ ] Containerised execution for heavier, non-webR workloads

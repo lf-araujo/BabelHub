@@ -1,0 +1,21 @@
+# /etc/systemd/system/babelhub.service
+# Deploy: scp the binary to /usr/local/bin/babelhub, then
+#   systemctl enable --now babelhub
+[Unit]
+Description=BabelHub server
+After=network.target
+
+[Service]
+ExecStart=/usr/local/bin/babelhub
+Environment=PORT=8080
+DynamicUser=yes
+Restart=on-failure
+RestartSec=2
+# Hardening — the binary is self-contained and needs no filesystem access.
+NoNewPrivileges=yes
+ProtectSystem=strict
+ProtectHome=yes
+PrivateTmp=yes
+
+[Install]
+WantedBy=multi-user.target

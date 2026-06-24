@@ -1,0 +1,24 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>BabelHub — org-mode, live in the browser</title>
+  </head>
+  <body>
+    <header id="topbar">
+      <strong>BabelHub</strong>
+      <span class="tagline">org-mode + live R, in the browser</span>
+      <span id="webr-status" class="status">R: not started</span>
+    </header>
+    <main id="panes">
+      <section id="editor-pane">
+        <div id="editor" aria-label="Org source"></div>
+      </section>
+      <section id="preview-pane">
+        <article id="preview"></article>
+      </section>
+    </main>
+    <script type="module" src="/src/main.ts"></script>
+  </body>
+</html>

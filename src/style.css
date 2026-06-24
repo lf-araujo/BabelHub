@@ -1,0 +1,101 @@
+:root {
+  --bg: #fbfbf9;
+  --fg: #1b1b1a;
+  --muted: #6b6b66;
+  --accent: #2f7d5b;
+  --border: #e3e3dd;
+  --code-bg: #f3f3ee;
+  font-family: system-ui, -apple-system, "Segoe UI", sans-serif;
+}
+
+* { box-sizing: border-box; }
+
+html, body { height: 100%; margin: 0; }
+
+body {
+  display: flex;
+  flex-direction: column;
+  color: var(--fg);
+  background: var(--bg);
+}
+
+#topbar {
+  display: flex;
+  align-items: baseline;
+  gap: 0.75rem;
+  padding: 0.5rem 1rem;
+  border-bottom: 1px solid var(--border);
+  background: #fff;
+}
+#topbar strong { color: var(--accent); }
+.tagline { color: var(--muted); font-size: 0.85rem; }
+.status { margin-left: auto; color: var(--muted); font-size: 0.8rem; font-variant-numeric: tabular-nums; }
+
+#panes {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  flex: 1;
+  min-height: 0;
+}
+#editor-pane { border-right: 1px solid var(--border); overflow: hidden; }
+
+#editor { height: 100%; }
+#editor .cm-editor { height: 100%; background: #fff; }
+#editor .cm-scroller {
+  font-family: ui-monospace, "Cascadia Code", "Fira Code", monospace;
+  font-size: 0.9rem;
+  line-height: 1.5;
+}
+#editor .cm-content { padding: 1rem 0; }
+#editor .cm-focused { outline: none; }
+#editor .cm-gutters { background: var(--bg); border: 0; color: var(--muted); }
+
+#preview-pane { overflow: auto; }
+#preview {
+  padding: 1.5rem 2rem;
+  max-width: 70ch;
+  line-height: 1.6;
+}
+#preview h1, #preview h2, #preview h3 { line-height: 1.2; }
+#preview pre.src-block {
+  background: var(--code-bg);
+  padding: 0.75rem 1rem;
+  border-radius: 6px;
+  overflow-x: auto;
+  margin: 0.25rem 0;
+}
+#preview code { font-family: ui-monospace, monospace; font-size: 0.85rem; }
+
+.run-btn {
+  display: inline-block;
+  margin-top: 0.5rem;
+  padding: 0.2rem 0.7rem;
+  border: 1px solid var(--accent);
+  border-radius: 5px;
+  background: var(--accent);
+  color: #fff;
+  font-size: 0.8rem;
+  cursor: pointer;
+}
+.run-btn:disabled { opacity: 0.6; cursor: default; }
+
+.run-result {
+  background: #0e1f17;
+  color: #d6f0e2;
+  padding: 0.6rem 1rem;
+  border-radius: 6px;
+  margin: 0.4rem 0 0.75rem;
+  white-space: pre-wrap;
+  font-family: ui-monospace, monospace;
+  font-size: 0.82rem;
+}
+.run-result.run-error { background: #2a1414; color: #f3c7c7; }
+
+.run-plots { margin: 0.4rem 0 0.75rem; }
+.run-plot {
+  max-width: 100%;
+  height: auto;
+  background: #fff;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+}

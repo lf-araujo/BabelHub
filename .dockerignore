@@ -1,0 +1,7 @@
+node_modules
+dist
+nimcache
+/babelhub
+/babelhub.exe
+.git
+*.log

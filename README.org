@@ -1,0 +1,112 @@
+#+TITLE: BabelHub
+#+SUBTITLE: An Overleaf for Emacs org-mode
+
+BabelHub renders org-mode documents in the browser and makes their source
+blocks *runnable*. The wedge: do the one thing a GitHub-rendered org file
+structurally cannot — execute ~#+begin_src R~ blocks — at zero marginal server
+cost, by running them client-side via [[https://webr.r-wasm.org][webR]].
+
+* Status: Tier-1 MVP
+
+A split-pane web app:
+
+- *Left*: a [[https://codemirror.net/][CodeMirror 6]] editor with a lightweight org-mode highlighter.
+- *Right*: a live preview, parsed by [[https://github.com/rasmusbe/uniorg][uniorg]] (the same parser model as
+  org-element.el — we don't roll our own).
+- Each R source block gets a *▶ Run* button. Clicking it boots webR (~30MB,
+  downloaded lazily on first run, never at page load) and shows captured
+  output *and any plots*, rendered inline.
+
+Other languages render but aren't runnable yet — that's the boundary between
+the free webR tier and the future containerised-execution paid tier.
+
+The whole thing ships as a *single static Nim binary*: ~src/server~ embeds the
+built frontend at compile time, so deployment is one ~scp~ — no Node, no
+~dist/~ directory on the server.
+
+* Run it
+
+Everything is driven through *nimble* — the web build is wired in as a hook, so
+you never call ~npm~ directly.
+
+#+begin_src sh
+nimble dev          # Vite dev server, hot reload  -> http://localhost:5173
+nimble build        # frontend + compile the single release binary -> ./babelhub
+PORT=8080 nimble run   # build + run the server     -> http://localhost:8080
+nimble install      # build + install `babelhub` into ~/.nimble/bin
+nimble probe        # headless check: render + Run-button wiring
+nimble tidy         # remove all build artifacts (binary, dist/, nim cache)
+#+end_src
+
+(~nimble clean~ is nimble's built-in and only cleans the Nim side; ~nimble tidy~
+also removes the frontend ~dist/~.)
+
+The dev server sends ~Cross-Origin-Opener-Policy~ / ~Cross-Origin-Embedder-Policy~
+headers so webR can use its fast SharedArrayBuffer channel; the production
+server sets them too. Any host in front (Caddy) must pass them through.
+
+* Ship it (single binary)
+
+~nimble build~ produces ~./babelhub~ — the frontend is embedded, so that one
+file is the whole deploy. To a Hetzner box: ~scp babelhub root@host:/usr/local/bin/~,
+drop in ~server/deploy/babelhub.service~ (systemd) and ~server/deploy/Caddyfile~
+(TLS + reverse proxy), then ~systemctl enable --now babelhub~.
+
+* Run it in a container
+
+The self-contained binary makes this trivial — the image is just a base + the
+binary, no Node, no ~dist/~.
+
+#+begin_src sh
+nimble docker                          # docker build -t babelhub .
+docker run -p 8080:8080 babelhub       # http://localhost:8080
+#+end_src
+
+The ~Dockerfile~ builds everything itself (frontend, then the embedding Nim
+compile) so it needs no host toolchain. For an even smaller =scratch= image,
+~nimble staticbin~ builds a fully-static musl binary.
+
+Note: this containerises *BabelHub itself*. Running each org *code block* in its
+own container is the separate Tier-3 execution backend — today's R blocks run
+client-side in webR (no container), and this design leaves room to add the
+container-per-block backend later without rework.
+
+* Layout
+
+| Path                | Role                                            |
+|---------------------+-------------------------------------------------|
+| ~src/render.ts~     | org text → HTML via the uniorg/unified pipeline |
+| ~src/run.ts~        | lazy webR boot + Run-button wiring              |
+| ~src/main.ts~       | editor ↔ debounced render ↔ buttons             |
+| ~src/editor.ts~     | CodeMirror + org StreamLanguage highlighter     |
+| ~public/sample.org~ | demo document loaded on first paint             |
+| ~scripts/probe.ts~  | jsdom verification of the render+run wiring      |
+| ~server/babelhub.nim~ | Nim server; embeds dist/ → single binary      |
+| ~babelhub.nimble~   | one entry point: build/run/install/docker tasks |
+| ~Dockerfile~        | self-contained image build                      |
+| ~server/deploy/~    | systemd unit + Caddyfile for the Hetzner box    |
+
+* Roadmap
+
+Sequenced cheapest-first, each step independently shippable.
+
+** Tier 1 — free, near-zero server cost (this MVP)
+- [X] uniorg render + webR Run buttons
+- [X] CodeMirror editor surface with org highlighting
+- [X] Capture and inline plots (webR graphics device → canvas)
+- [X] Single static Nim binary serving the embedded site
+- [ ] Org-aware diff view (heading/subtree level, not line-based)
+
+** Tier 2 — still serverless-ish
+- [ ] Export-as-a-service via GitHub Actions (PDF/Beamer/HTML; GitHub's compute)
+- [ ] Org-aware diff bot posting PR comments
+
+** Tier 3 — paid, real backend (Nim)
+- [ ] Single static Nim binary (Jester/Prologue) on Hetzner CX23 + Caddy TLS
+- [ ] GitHub OAuth, Stripe billing, Git-backed storage + Postgres metadata
+- [ ] Containerised, scale-to-zero execution for heavy/compiled workloads
+      (fastsem, Nim, R packages webR can't reach), billed per-second
+
+** Endgame
+- [ ] BYOC orchestration: run blocks in the customer's *own* cloud account
+- [ ] Compliant workbench plugging into All of Us / ABCD enclaves

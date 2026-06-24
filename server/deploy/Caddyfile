@@ -1,0 +1,7 @@
+# /etc/caddy/Caddyfile
+# Caddy terminates TLS (automatic certs) and reverse-proxies to the Nim server.
+# The COOP/COEP headers webR needs are set by the upstream and passed through.
+babelhub.example.com {
+	encode zstd gzip
+	reverse_proxy localhost:8080
+}
