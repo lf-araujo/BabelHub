@@ -45,6 +45,15 @@ task staticbin, "Build a fully-static musl binary (for a scratch container)":
 task docker, "Build the container image (self-contained; needs only Docker)":
   exec "docker build -t babelhub ."
 
+task drun, "Build image, then (re)launch the container on :8080 with a data volume":
+  dockerTask()
+  # `docker run` never replaces an existing container, so remove the old one
+  # first (|| true: fine if none is running). The named volume keeps documents
+  # across restarts; without it /data dies with the container.
+  exec "docker rm -f babelhub 2>/dev/null || true"
+  exec "docker run -d --name babelhub -p 8080:8080 -v babelhub-data:/data babelhub"
+  echo "BabelHub running -> http://localhost:8080   (logs: docker logs -f babelhub)"
+
 # Note: nimble has a built-in `clean`, but it only knows about the Nim side.
 # `tidy` does the full sweep, including the frontend's dist/.
 task tidy, "Remove all build artifacts (binary, dist/, nim cache)":

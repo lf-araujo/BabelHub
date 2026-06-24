@@ -74,9 +74,27 @@ The self-contained binary makes this trivial — the image is just a base + the
 binary, no Node, no ~dist/~.
 
 #+begin_src sh
-nimble docker                          # docker build -t babelhub .
-docker run -p 8080:8080 babelhub       # http://localhost:8080
+nimble drun        # build image + (re)launch on :8080 with a data volume
 #+end_src
+
+~nimble drun~ is the one-step recipe: it builds the image, removes any previous
+~babelhub~ container, and starts a fresh one. The expanded form it runs:
+
+#+begin_src sh
+docker build -t babelhub .
+docker rm -f babelhub 2>/dev/null || true   # `docker run` never replaces a container
+docker run -d --name babelhub -p 8080:8080 -v babelhub-data:/data babelhub
+#+end_src
+
+Two things worth knowing:
+
+- *~docker run~ is not idempotent* — each call creates a new container, so a
+  second ~docker run -p 8080:8080~ fails with "port is already allocated" until
+  you ~docker rm -f babelhub~. Naming the container (as above) makes replacing
+  it a one-liner.
+- *Persist documents.* Saved docs live at ~/data~ inside the container and die
+  with ~docker rm~. The ~-v babelhub-data:/data~ named volume keeps them across
+  restarts.
 
 The ~Dockerfile~ builds everything itself (frontend, then the embedding Nim
 compile) so it needs no host toolchain. For an even smaller =scratch= image,
