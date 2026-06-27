@@ -12,6 +12,10 @@ Environment=PORT=8080
 # owned by the dynamic user). Requires `git` installed on the host.
 StateDirectory=babelhub
 Environment=BABELHUB_DATA=/var/lib/babelhub
+# Gate server execution before exposing it publicly:
+#   Environment=BABELHUB_EXEC=1
+#   Environment=BABELHUB_TOKEN=<a long random secret>
+#   Environment=BABELHUB_RATE=30
 DynamicUser=yes
 Restart=on-failure
 RestartSec=2

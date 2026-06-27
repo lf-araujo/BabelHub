@@ -83,10 +83,29 @@ and a ~BABELHUB_EXEC_MAX~ concurrency cap (default 4). Code is fed on stdin.
 Because the sandbox has no network, images are never pulled at run time — hence
 ~nimble images~.
 
-⚠️ *Security:* this runs untrusted code. The sandbox is strong, but a *public*
-deployment must add authentication, rate limiting, and abuse monitoring before
-enabling it. Treat ~BABELHUB_EXEC=1~ as "trusted users only" for now. The server
-also needs access to the Docker socket (so run it where that's acceptable).
+⚠️ *Security:* this runs untrusted code. The sandbox is strong and the gate
+below adds auth + rate limiting, but a public deployment should still add abuse
+monitoring. The server also needs Docker-socket access for the docker runner
+(run it where that's acceptable).
+
+** Auth & rate limiting
+
+The gate that makes server execution safe to expose:
+
+- *Shared token* — set ~BABELHUB_TOKEN~ and every API call (documents and exec)
+  needs ~Authorization: Bearer <token>~; the static app stays public and the
+  ~GET /api/exec~ capability probe stays public so the page can boot. The
+  frontend prompts for the token once on the first 401 and remembers it. With no
+  token set, the API is open (local/dev). This is a single shared secret —
+  per-user identity (GitHub OAuth) is the next step.
+- *Rate limit* — exec is capped at ~BABELHUB_RATE~ requests per
+  ~BABELHUB_RATE_WINDOW~ seconds, per client IP (X-Forwarded-For aware, for
+  behind Caddy); over the limit returns ~429~ with ~Retry-After~.
+
+#+begin_src sh
+BABELHUB_EXEC=1 BABELHUB_TOKEN=$(openssl rand -hex 16) \
+  BABELHUB_RATE=30 PORT=8080 ./babelhub
+#+end_src
 
 API: ~GET /api/exec~ → ~{"enabled","languages","sessionLanguages"}~;
 ~POST /api/exec~ with ~{"lang","code"}~ → ~{"ok","output"}~ (403 when disabled).
@@ -114,7 +133,8 @@ Runner (~BABELHUB_EXEC_RUNNER~):
 Config knobs: ~BABELHUB_EXEC~, ~BABELHUB_EXEC_RUNNER~, ~BABELHUB_EXEC_TIMEOUT~,
 ~BABELHUB_EXEC_MEM~, ~BABELHUB_EXEC_CPUS~, ~BABELHUB_EXEC_MAX~ (ephemeral
 concurrency), ~BABELHUB_SESSION_MAX~ (live sessions), ~BABELHUB_SESSION_IDLE~
-(idle reap, seconds).
+(idle reap, seconds), ~BABELHUB_TOKEN~ (shared auth token),
+~BABELHUB_RATE~ / ~BABELHUB_RATE_WINDOW~ (exec rate limit).
 
 * Ship it (single binary)
 
@@ -175,6 +195,8 @@ container-per-block backend later without rework.
 | ~server/storage.nim~ | git-backed document store + API                |
 | ~server/exec.nim~   | ephemeral sandboxed execution (Tier 3, opt-in)  |
 | ~server/session.nim~ | persistent session interpreters (R/Python)     |
+| ~server/gate.nim~   | shared-token auth + per-IP rate limiter         |
+| ~src/api.ts~        | token-aware fetch (prompts on 401)              |
 | ~babelhub.nimble~   | one entry point: build/run/install/docker tasks |
 | ~Dockerfile~        | self-contained image build                      |
 | ~server/deploy/~    | systemd unit + Caddyfile for the Hetzner box    |

@@ -81,4 +81,5 @@ uname -sm
 - [X] Python execution via Pyodide
 - [X] Containerised execution for other languages (opt-in)
 - [X] Persistent session containers (shared state across blocks)
-- [ ] Auth + rate limiting (gate server execution for public use)
+- [X] Auth + rate limiting (gate server execution for public use)
+- [ ] GitHub OAuth (per-user identity, beyond the shared token)

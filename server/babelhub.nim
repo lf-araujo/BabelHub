@@ -9,7 +9,7 @@
 ## (Caddy) sits in front; this process speaks plain HTTP on $PORT.
 
 import std/[asynchttpserver, asyncdispatch, os, strutils, tables, json]
-import storage, exec, session
+import storage, exec, session, gate
 
 const distDir = normalizedPath(currentSourcePath().parentDir / ".." / "dist")
 
@@ -60,49 +60,67 @@ proc baseHeaders(ctype: string): HttpHeaders =
 
 const jsonType = "application/json"
 
+proc header(req: Request, name: string): string =
+  if req.headers.hasKey(name): $req.headers[name] else: ""
+
+proc clientKey(req: Request): string =
+  ## Rate-limit key: the real client IP (X-Forwarded-For behind Caddy) or peer.
+  let xff = header(req, "X-Forwarded-For")
+  if xff.len > 0: xff.split(",")[0].strip() else: req.hostname
+
 proc handleApi(req: Request, route: string) {.async, gcsafe.} =
-  ## Document storage API. GET /api/docs -> list; GET|PUT /api/docs/<slug>.
+  # Public capability probe, so the frontend can learn auth/exec state up front.
+  if route == "/api/exec" and req.reqMethod == HttpGet:
+    let caps = %*{
+      "enabled": execEnabled(),
+      "authRequired": authRequired(),
+      "languages": ephemeralLanguages(),
+      "sessionLanguages": sessionLanguages(),
+    }
+    await req.respond(Http200, $caps, baseHeaders(jsonType))
+    return
+
+  # Everything else requires the shared token when one is configured.
+  if authRequired() and not checkAuth(header(req, "Authorization")):
+    await req.respond(Http401, """{"error":"unauthorized"}""", baseHeaders(jsonType))
+    return
+
   if route == "/api/docs" and req.reqMethod == HttpGet:
     await req.respond(Http200, listDocsJson(), baseHeaders(jsonType))
     return
-  if route == "/api/exec":
-    case req.reqMethod
-    of HttpGet:
-      # Capability probe: is server execution on, and which languages run
-      # per-block (ephemeral) vs in a persistent session.
-      let caps = %*{
-        "enabled": execEnabled(),
-        "languages": ephemeralLanguages(),
-        "sessionLanguages": sessionLanguages(),
-      }
-      await req.respond(Http200, $caps, baseHeaders(jsonType))
-    of HttpPost:
-      if not execEnabled():
-        await req.respond(Http403, """{"error":"server execution disabled"}""",
-                          baseHeaders(jsonType))
-        return
-      var lang, code, sess: string
-      try:
-        let body = parseJson(req.body)
-        lang = body{"lang"}.getStr
-        code = body{"code"}.getStr
-        sess = body{"session"}.getStr
-      except CatchableError:
-        await req.respond(Http400, """{"error":"bad request body"}""",
-                          baseHeaders(jsonType))
-        return
-      var ok: bool
-      var output: string
-      if sess.len > 0 and lang in sessionLanguages():
-        # Persistent session: shared state across blocks (one interpreter).
-        (ok, output) = sessionExec(sess, lang, code)
-      else:
-        # Ephemeral: throwaway container per block.
-        (ok, output) = await runBlock(lang, code)
-      await req.respond(Http200, $(%*{"ok": ok, "output": output}),
+
+  if route == "/api/exec" and req.reqMethod == HttpPost:
+    if not execEnabled():
+      await req.respond(Http403, """{"error":"server execution disabled"}""",
                         baseHeaders(jsonType))
+      return
+    if not rateAllow(clientKey(req)):
+      var h = baseHeaders(jsonType)
+      h["Retry-After"] = $rateWindow()
+      await req.respond(Http429, """{"error":"rate limited, slow down"}""", h)
+      return
+    var lang, code, sess: string
+    try:
+      let body = parseJson(req.body)
+      lang = body{"lang"}.getStr
+      code = body{"code"}.getStr
+      sess = body{"session"}.getStr
+    except CatchableError:
+      await req.respond(Http400, """{"error":"bad request body"}""", baseHeaders(jsonType))
+      return
+    var ok: bool
+    var output: string
+    if sess.len > 0 and lang in sessionLanguages():
+      # Persistent session: shared state across blocks (one interpreter).
+      (ok, output) = sessionExec(sess, lang, code)
     else:
-      await req.respond(Http405, """{"error":"method not allowed"}""", baseHeaders(jsonType))
+      # Ephemeral: throwaway container per block.
+      (ok, output) = await runBlock(lang, code)
+    await req.respond(Http200, $(%*{"ok": ok, "output": output}), baseHeaders(jsonType))
+    return
+
+  if route == "/api/exec":
+    await req.respond(Http405, """{"error":"method not allowed"}""", baseHeaders(jsonType))
     return
   if route.startsWith("/api/docs/"):
     let slug = route["/api/docs/".len .. ^1]

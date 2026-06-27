@@ -1,5 +1,6 @@
 import type { WebR } from 'webr';
 import type { PyodideInterface } from 'pyodide';
+import { apiFetch } from './api.ts';
 
 // Both runtimes run client-side in the visitor's browser, so executing code
 // costs the server nothing. Each is dynamically imported on first Run, so
@@ -145,7 +146,7 @@ export function setSessionIdProvider(fn: () => string): void {
 /** Ask the backend whether server execution is on, and for which languages. */
 export async function loadExecCaps(): Promise<ExecCaps> {
   try {
-    const r = await fetch('/api/exec');
+    const r = await apiFetch('/api/exec');
     if (r.ok) execCaps = (await r.json()) as ExecCaps;
   } catch {
     /* backend unreachable — server execution simply stays unavailable */
@@ -154,11 +155,15 @@ export async function loadExecCaps(): Promise<ExecCaps> {
 }
 
 async function postExec(body: Record<string, string>): Promise<RunResult> {
-  const r = await fetch('/api/exec', {
+  const r = await apiFetch('/api/exec', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(body),
   });
+  if (r.status === 429) {
+    const retry = r.headers.get('Retry-After');
+    throw new Error(`rate limited — wait ${retry ?? 'a moment'}s and retry`);
+  }
   if (!r.ok) throw new Error(`server exec failed (${r.status})`);
   const data = (await r.json()) as { ok: boolean; output: string };
   if (!data.ok) throw new Error(data.output);

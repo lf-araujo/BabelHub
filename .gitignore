@@ -11,3 +11,6 @@ nimcache/
 # local document store (created at runtime when BABELHUB_DATA is unset)
 /data/
 
+
+# stray R default plot device output
+Rplots.pdf
