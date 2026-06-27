@@ -88,11 +88,33 @@ deployment must add authentication, rate limiting, and abuse monitoring before
 enabling it. Treat ~BABELHUB_EXEC=1~ as "trusted users only" for now. The server
 also needs access to the Docker socket (so run it where that's acceptable).
 
-API: ~GET /api/exec~ → ~{"enabled", "languages"}~; ~POST /api/exec~ with
-~{"lang","code"}~ → ~{"ok","output"}~ (403 when disabled).
+API: ~GET /api/exec~ → ~{"enabled","languages","sessionLanguages"}~;
+~POST /api/exec~ with ~{"lang","code"}~ → ~{"ok","output"}~ (403 when disabled).
 
-Config knobs: ~BABELHUB_EXEC~, ~BABELHUB_EXEC_TIMEOUT~, ~BABELHUB_EXEC_MEM~,
-~BABELHUB_EXEC_CPUS~, ~BABELHUB_EXEC_MAX~.
+** Persistent sessions (R / Python)
+
+R and Python run client-side by default (webR/Pyodide). When ~BABELHUB_EXEC=1~,
+the toolbar shows a *Run: browser ⟷ session* toggle; in *session* mode those
+blocks run server-side in a *persistent* container instead — one long-lived
+interpreter per (document, language), so state is shared across blocks like a
+Jupyter kernel and like org-babel's ~:session~. A fitted model in one block is
+available in the next; an error doesn't kill the session.
+
+Under the hood each interpreter runs a small driver speaking a length-framed
+protocol over stdin/stdout. ~POST /api/exec~ with an extra ~"session"~ field
+routes to the session for that document. Idle sessions are reaped.
+
+Runner (~BABELHUB_EXEC_RUNNER~):
+- ~docker~ (default) — the interpreter runs in the same locked-down sandbox as
+  above (plus a writable ~/tmp~ + ~/home~ tmpfs). Needs ~python:3.12-slim~ and
+  ~r-base~ images (~nimble images~ pulls them).
+- ~local~ — the interpreter runs directly on the host (no isolation). Fine for a
+  single trusted user; this is what the driver tests exercise.
+
+Config knobs: ~BABELHUB_EXEC~, ~BABELHUB_EXEC_RUNNER~, ~BABELHUB_EXEC_TIMEOUT~,
+~BABELHUB_EXEC_MEM~, ~BABELHUB_EXEC_CPUS~, ~BABELHUB_EXEC_MAX~ (ephemeral
+concurrency), ~BABELHUB_SESSION_MAX~ (live sessions), ~BABELHUB_SESSION_IDLE~
+(idle reap, seconds).
 
 * Ship it (single binary)
 
@@ -151,7 +173,8 @@ container-per-block backend later without rework.
 | ~scripts/probe.ts~  | jsdom verification of the render+run wiring      |
 | ~server/babelhub.nim~ | Nim server; embeds dist/ → single binary      |
 | ~server/storage.nim~ | git-backed document store + API                |
-| ~server/exec.nim~   | sandboxed container execution (Tier 3, opt-in)  |
+| ~server/exec.nim~   | ephemeral sandboxed execution (Tier 3, opt-in)  |
+| ~server/session.nim~ | persistent session interpreters (R/Python)     |
 | ~babelhub.nimble~   | one entry point: build/run/install/docker tasks |
 | ~Dockerfile~        | self-contained image build                      |
 | ~server/deploy/~    | systemd unit + Caddyfile for the Hetzner box    |

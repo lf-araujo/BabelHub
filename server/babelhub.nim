@@ -9,7 +9,7 @@
 ## (Caddy) sits in front; this process speaks plain HTTP on $PORT.
 
 import std/[asynchttpserver, asyncdispatch, os, strutils, tables, json]
-import storage, exec
+import storage, exec, session
 
 const distDir = normalizedPath(currentSourcePath().parentDir / ".." / "dist")
 
@@ -68,23 +68,37 @@ proc handleApi(req: Request, route: string) {.async, gcsafe.} =
   if route == "/api/exec":
     case req.reqMethod
     of HttpGet:
-      # Capability probe: is server execution on, and for which languages.
-      await req.respond(Http200, capsJson(), baseHeaders(jsonType))
+      # Capability probe: is server execution on, and which languages run
+      # per-block (ephemeral) vs in a persistent session.
+      let caps = %*{
+        "enabled": execEnabled(),
+        "languages": ephemeralLanguages(),
+        "sessionLanguages": sessionLanguages(),
+      }
+      await req.respond(Http200, $caps, baseHeaders(jsonType))
     of HttpPost:
       if not execEnabled():
         await req.respond(Http403, """{"error":"server execution disabled"}""",
                           baseHeaders(jsonType))
         return
-      var lang, code: string
+      var lang, code, sess: string
       try:
         let body = parseJson(req.body)
         lang = body{"lang"}.getStr
         code = body{"code"}.getStr
+        sess = body{"session"}.getStr
       except CatchableError:
         await req.respond(Http400, """{"error":"bad request body"}""",
                           baseHeaders(jsonType))
         return
-      let (ok, output) = await runBlock(lang, code)
+      var ok: bool
+      var output: string
+      if sess.len > 0 and lang in sessionLanguages():
+        # Persistent session: shared state across blocks (one interpreter).
+        (ok, output) = sessionExec(sess, lang, code)
+      else:
+        # Ephemeral: throwaway container per block.
+        (ok, output) = await runBlock(lang, code)
       await req.respond(Http200, $(%*{"ok": ok, "output": output}),
                         baseHeaders(jsonType))
     else:
@@ -128,6 +142,7 @@ when isMainModule:
     stderr.writeLine "No embedded assets — run `npm run build` before compiling."
     quit 1
   initStore()
+  asyncCheck reaper() # close idle persistent sessions
   let port = Port(parseInt(getEnv("PORT", "8080")))
   let server = newAsyncHttpServer()
   echo "BabelHub serving ", embedded.len, " embedded assets on :", $port.uint16

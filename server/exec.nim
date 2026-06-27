@@ -45,12 +45,10 @@ var nameSeq = 0
 proc execEnabled*(): bool {.gcsafe.} =
   {.cast(gcsafe).}: cfgEnabled
 
-proc capsJson*(): string {.gcsafe.} =
-  ## What the frontend asks for: is exec on, and which languages.
+proc ephemeralLanguages*(): seq[string] {.gcsafe.} =
+  ## Languages run per-block in a throwaway container (no shared state).
   {.cast(gcsafe).}:
-    var langs: seq[string]
-    for k in registry.keys: langs.add k
-    result = $(%*{"enabled": cfgEnabled, "languages": langs})
+    for k in registry.keys: result.add k
 
 proc runBlock*(lang, code: string): Future[tuple[ok: bool, output: string]] {.async, gcsafe.} =
   {.cast(gcsafe).}:

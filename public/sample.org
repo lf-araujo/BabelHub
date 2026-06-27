@@ -80,4 +80,5 @@ uname -sm
 - [X] Save/load via Git-backed storage
 - [X] Python execution via Pyodide
 - [X] Containerised execution for other languages (opt-in)
-- [ ] Persistent session containers (shared state across blocks)
+- [X] Persistent session containers (shared state across blocks)
+- [ ] Auth + rate limiting (gate server execution for public use)

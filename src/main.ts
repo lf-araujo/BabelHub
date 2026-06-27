@@ -1,5 +1,11 @@
 import { renderOrg } from './render';
-import { attachRunButtons, setRunStatusHandler, loadExecCaps } from './run';
+import {
+  attachRunButtons,
+  setRunStatusHandler,
+  loadExecCaps,
+  setRunMode,
+  setSessionIdProvider,
+} from './run';
 import { createEditor, setEditorContent } from './editor';
 import * as store from './storage';
 import './style.css';
@@ -12,10 +18,14 @@ const docList = document.querySelector<HTMLSelectElement>('#doc-list')!;
 const docNew = document.querySelector<HTMLButtonElement>('#doc-new')!;
 const docSave = document.querySelector<HTMLButtonElement>('#doc-save')!;
 const docName = document.querySelector<HTMLElement>('#doc-name')!;
+const runMode = document.querySelector<HTMLSelectElement>('#run-mode')!;
 
 setRunStatusHandler((text) => {
   status.textContent = text;
 });
+
+// Persistent server sessions are keyed per document (unsaved = "scratch").
+setSessionIdProvider(() => currentSlug ?? 'scratch');
 
 // New documents start session-ready, so they behave the same in Emacs.
 const NEW_TEMPLATE = `#+TITLE: Untitled
@@ -108,8 +118,17 @@ docSave.addEventListener('click', async () => {
   }
 });
 
+runMode.addEventListener('change', () => {
+  setRunMode(runMode.value === 'server' ? 'server' : 'client');
+  void render(); // relabel/reroute Run buttons
+});
+
 void render();
 void refreshList();
-// Once we know whether the backend offers container execution, re-render so
-// any server-runnable blocks (bash, julia, …) pick up a Run button.
-void loadExecCaps().then(render);
+// Once we know the backend's exec capabilities: reveal the browser/session
+// toggle if sessions are available, and re-render so server-only blocks
+// (bash, julia, …) pick up their Run buttons.
+void loadExecCaps().then((caps) => {
+  if (caps.enabled && caps.sessionLanguages.length > 0) runMode.hidden = false;
+  return render();
+});

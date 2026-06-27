@@ -124,31 +124,50 @@ async function runPython(code: string): Promise<RunResult> {
 // --- server execution (containerised, paid tier) --------------------------
 interface ExecCaps {
   enabled: boolean;
-  languages: string[];
+  languages: string[]; // ephemeral, one throwaway container per block
+  sessionLanguages: string[]; // persistent session (shared state)
 }
-let execCaps: ExecCaps = { enabled: false, languages: [] };
+let execCaps: ExecCaps = { enabled: false, languages: [], sessionLanguages: [] };
 
-/** Ask the backend whether container execution is on, and for which languages. */
-export async function loadExecCaps(): Promise<void> {
+// For languages that have both a client runtime and a server session (R,
+// Python), this picks which one Run uses. Default: client (free, no server).
+let runMode: 'client' | 'server' = 'client';
+export function setRunMode(mode: 'client' | 'server'): void {
+  runMode = mode;
+}
+
+// The persistent session is keyed per document; main supplies the current id.
+let sessionId: () => string = () => 'scratch';
+export function setSessionIdProvider(fn: () => string): void {
+  sessionId = fn;
+}
+
+/** Ask the backend whether server execution is on, and for which languages. */
+export async function loadExecCaps(): Promise<ExecCaps> {
   try {
     const r = await fetch('/api/exec');
     if (r.ok) execCaps = (await r.json()) as ExecCaps;
   } catch {
     /* backend unreachable — server execution simply stays unavailable */
   }
+  return execCaps;
 }
 
-async function runOnServer(lang: string, code: string): Promise<RunResult> {
+async function postExec(body: Record<string, string>): Promise<RunResult> {
   const r = await fetch('/api/exec', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ lang, code }),
+    body: JSON.stringify(body),
   });
   if (!r.ok) throw new Error(`server exec failed (${r.status})`);
   const data = (await r.json()) as { ok: boolean; output: string };
   if (!data.ok) throw new Error(data.output);
   return { text: data.output, images: [] };
 }
+
+const runEphemeral = (lang: string, code: string) => postExec({ lang, code });
+const runSession = (lang: string, code: string) =>
+  postExec({ lang, code, session: sessionId() });
 
 // --- dispatch -------------------------------------------------------------
 type Runtime = 'r' | 'python';
@@ -167,11 +186,22 @@ export function attachRunButtons(root: ParentNode): void {
   const blocks = root.querySelectorAll<HTMLElement>('pre.src-block > code[class*="language-"]');
   for (const code of Array.from(blocks)) {
     const lang = (code.className.match(/language-([\w-]+)/)?.[1] ?? '').toLowerCase();
-    const runtime = runtimeFor(lang); // client-side: webR / Pyodide
-    // Server-side container execution covers other languages (and only when the
-    // backend has it enabled). Client runtimes win when both could apply.
-    const onServer = !runtime && execCaps.enabled && execCaps.languages.includes(lang);
-    if (!runtime && !onServer) continue;
+    const clientRuntime = runtimeFor(lang); // webR / Pyodide
+
+    // Decide how this block runs:
+    //  - client    : R/Python in the browser (default)
+    //  - session    : R/Python in a persistent server container (shared state)
+    //  - ephemeral  : other languages in a throwaway server container
+    let kind: 'client' | 'session' | 'ephemeral' | null = null;
+    if (clientRuntime) {
+      kind =
+        runMode === 'server' && execCaps.enabled && execCaps.sessionLanguages.includes(lang)
+          ? 'session'
+          : 'client';
+    } else if (execCaps.enabled && execCaps.languages.includes(lang)) {
+      kind = 'ephemeral';
+    }
+    if (!kind) continue;
 
     const pre = code.parentElement as HTMLElement;
     if (pre.dataset.runnable) continue; // idempotent across re-renders
@@ -179,8 +209,11 @@ export function attachRunButtons(root: ParentNode): void {
 
     const button = document.createElement('button');
     button.className = 'run-btn';
-    button.textContent = onServer ? '▶ Run (container)' : '▶ Run';
-    if (onServer) button.dataset.server = '';
+    button.textContent =
+      kind === 'session' ? '▶ Run (session)'
+      : kind === 'ephemeral' ? '▶ Run (container)'
+      : '▶ Run';
+    if (kind !== 'client') button.dataset.server = '';
 
     const result = document.createElement('pre');
     result.className = 'run-result';
@@ -196,9 +229,12 @@ export function attachRunButtons(root: ParentNode): void {
       button.textContent = '… running';
       try {
         const src = code.textContent ?? '';
-        const exec = runtime === 'r' ? runR
-          : runtime === 'python' ? runPython
-          : (s: string) => runOnServer(lang, s);
+        const exec =
+          kind === 'client'
+            ? (clientRuntime === 'r' ? runR : runPython)
+            : kind === 'session'
+            ? (s: string) => runSession(lang, s)
+            : (s: string) => runEphemeral(lang, s);
         const { text, images } = await exec(src);
         result.textContent = text || (images.length ? '' : '(no output)');
         result.hidden = text.length === 0;
