@@ -20,7 +20,7 @@ RUN nim c -d:release --hints:off -o:/babelhub server/babelhub.nim
 # 3. Minimal runtime — the binary links glibc + libm and shells out to git.
 FROM debian:stable-slim
 RUN apt-get update \
-    && apt-get install -y --no-install-recommends git ca-certificates \
+    && apt-get install -y --no-install-recommends git ca-certificates openssl \
     && rm -rf /var/lib/apt/lists/* \
     && mkdir -p /data && chown nobody:nogroup /data
 COPY --from=server /babelhub /usr/local/bin/babelhub

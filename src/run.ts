@@ -130,10 +130,18 @@ async function runPython(code: string): Promise<RunResult> {
 // --- server execution (containerised, paid tier) --------------------------
 interface ExecCaps {
   enabled: boolean;
+  authRequired: boolean;
+  oauth: boolean;
   languages: string[]; // ephemeral, one throwaway container per block
   sessionLanguages: string[]; // persistent session (shared state)
 }
-let execCaps: ExecCaps = { enabled: false, languages: [], sessionLanguages: [] };
+let execCaps: ExecCaps = {
+  enabled: false,
+  authRequired: false,
+  oauth: false,
+  languages: [],
+  sessionLanguages: [],
+};
 
 // For languages that have both a client runtime and a server session (R,
 // Python), this picks which one Run uses. Default: client (free, no server).

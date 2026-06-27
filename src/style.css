@@ -44,6 +44,9 @@ body {
 #topbar button:hover { border-color: var(--accent); color: var(--accent); }
 #topbar button:disabled { opacity: 0.5; cursor: default; }
 .docname { color: var(--muted); font-size: 0.8rem; font-style: italic; }
+.auth { font-size: 0.8rem; }
+.auth .me { color: var(--accent); font-weight: 600; }
+.auth a { color: var(--accent); }
 
 #panes {
   display: grid;

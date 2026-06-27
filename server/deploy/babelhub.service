@@ -16,6 +16,10 @@ Environment=BABELHUB_DATA=/var/lib/babelhub
 #   Environment=BABELHUB_EXEC=1
 #   Environment=BABELHUB_TOKEN=<a long random secret>
 #   Environment=BABELHUB_RATE=30
+# Per-user identity via GitHub OAuth (instead of, or alongside, the token):
+#   Environment=BABELHUB_GH_CLIENT_ID=<oauth app client id>
+#   Environment=BABELHUB_GH_CLIENT_SECRET=<oauth app client secret>
+#   Environment=BABELHUB_BASE_URL=https://babelhub.example.com
 DynamicUser=yes
 Restart=on-failure
 RestartSec=2

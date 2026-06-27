@@ -4,6 +4,25 @@
 
 const TOKEN_KEY = 'babelhub-token';
 
+// How the backend authenticates: 'open' (no auth), 'token' (shared secret), or
+// 'oauth' (GitHub session cookie). Set from the capability probe; it decides
+// what a 401 means — prompt for a token, or leave login to the UI.
+let authMode: 'open' | 'token' | 'oauth' = 'open';
+export function setAuthMode(mode: 'open' | 'token' | 'oauth'): void {
+  authMode = mode;
+}
+
+/** Current GitHub login, or '' when anonymous / not in OAuth mode. */
+export async function getMe(): Promise<string> {
+  try {
+    const r = await fetch('/api/me');
+    if (r.ok) return ((await r.json()) as { login?: string }).login ?? '';
+  } catch {
+    /* ignore */
+  }
+  return '';
+}
+
 export function getToken(): string {
   return localStorage.getItem(TOKEN_KEY) ?? '';
 }
@@ -21,7 +40,9 @@ function withToken(init: RequestInit, token: string): RequestInit {
 
 export async function apiFetch(url: string, init: RequestInit = {}): Promise<Response> {
   let res = await fetch(url, withToken(init, getToken()));
-  if (res.status === 401) {
+  // Only prompt for a token in shared-token mode; in OAuth mode a 401 just means
+  // "log in", which the UI surfaces as a button (no prompt, no auto-redirect).
+  if (res.status === 401 && authMode === 'token') {
     const token = window.prompt('Access token required for BabelHub:') ?? '';
     if (!token) return res;
     setToken(token);

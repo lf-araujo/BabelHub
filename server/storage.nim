@@ -1,30 +1,46 @@
 ## Git-backed document storage.
 ##
 ## Each document is an `.org` file inside a data directory that is itself a git
-## repository, so every save is a commit — version history for free, matching
-## the mental model org-mode users already have. The data dir is $BABELHUB_DATA
-## (default ./data); the embedded frontend stays in the binary, only documents
-## live here.
+## repository, so every save is a commit — version history for free. The data
+## dir is $BABELHUB_DATA (default ./data).
+##
+## Documents live in a *namespace*: the empty namespace ("") is the shared store
+## (the default when there's no logged-in user); with GitHub OAuth, each user's
+## login is their namespace (a subdirectory with its own git repo), giving every
+## user a private document space.
 
 import std/[os, osproc, strutils, json, algorithm, streams]
 
 let storeDir = absolutePath(getEnv("BABELHUB_DATA", "data"))
 
-proc runGit(args: seq[string]): string {.discardable.} =
-  ## Run git in the store with explicit args (no shell), merging stderr.
-  let p = startProcess("git", workingDir = storeDir, args = args,
+proc validNamespace*(ns: string): bool =
+  ## "" is the shared store; otherwise a GitHub-login-shaped name.
+  if ns.len == 0: return true
+  if ns.len > 39: return false
+  for c in ns:
+    if c notin {'a'..'z', 'A'..'Z', '0'..'9', '-'}: return false
+  true
+
+proc nsDir(ns: string): string =
+  if ns.len == 0: storeDir else: storeDir / ns
+
+proc runGit(dir: string, args: seq[string]): string {.discardable.} =
+  let p = startProcess("git", workingDir = dir, args = args,
                        options = {poUsePath, poStdErrToStdOut})
   defer: p.close()
   result = p.outputStream.readAll()
   discard p.waitForExit()
 
+proc ensureRepo(dir: string) =
+  ## Create the namespace dir and make it a git repo with a commit identity.
+  createDir(dir)
+  if not dirExists(dir / ".git"):
+    runGit(dir, @["init", "-q"])
+    runGit(dir, @["config", "user.name", "BabelHub"])
+    runGit(dir, @["config", "user.email", "babelhub@localhost"])
+
 proc initStore*() =
-  ## Ensure the data dir exists and is a git repo with a commit identity.
-  createDir(storeDir)
-  if not dirExists(storeDir / ".git"):
-    runGit(@["init", "-q"])
-    runGit(@["config", "user.name", "BabelHub"])
-    runGit(@["config", "user.email", "babelhub@localhost"])
+  ensureRepo(storeDir)
   echo "BabelHub document store: ", storeDir
 
 proc validSlug*(slug: string): bool =
@@ -35,27 +51,29 @@ proc validSlug*(slug: string): bool =
     if c notin {'a'..'z', 'A'..'Z', '0'..'9', '_', '-'}: return false
   true
 
-proc listDocsJson*(): string {.gcsafe.} =
-  ## JSON {"docs": [...]} of available slugs, sorted. Slugs are validated on
-  ## write, so they need no escaping.
+proc listDocsJson*(ns: string): string {.gcsafe.} =
+  ## JSON {"docs": [...]} of slugs in the namespace, sorted.
   {.cast(gcsafe).}:
+    let dir = nsDir(ns)
     var slugs: seq[string]
-    for kind, path in walkDir(storeDir):
-      if kind == pcFile and path.endsWith(".org"):
-        slugs.add splitFile(path).name
+    if dirExists(dir):
+      for kind, path in walkDir(dir):
+        if kind == pcFile and path.endsWith(".org"):
+          slugs.add splitFile(path).name
     sort(slugs)
     result = $(%*{"docs": slugs})
 
-proc readDoc*(slug: string): (bool, string) {.gcsafe.} =
+proc readDoc*(ns, slug: string): (bool, string) {.gcsafe.} =
   {.cast(gcsafe).}:
-    let p = storeDir / (slug & ".org")
+    let p = nsDir(ns) / (slug & ".org")
     if fileExists(p): result = (true, readFile(p))
     else: result = (false, "")
 
-proc writeDoc*(slug, content: string) {.gcsafe.} =
-  ## Persist and commit. A no-op save (git finds nothing changed) is fine — the
-  ## file is written regardless; the commit is the bonus history layer.
+proc writeDoc*(ns, slug, content: string) {.gcsafe.} =
+  ## Persist and commit in the namespace (creating its repo on first write).
   {.cast(gcsafe).}:
-    writeFile(storeDir / (slug & ".org"), content)
-    runGit(@["add", "--", slug & ".org"])
-    discard runGit(@["commit", "-q", "-m", "Update " & slug, "--", slug & ".org"])
+    let dir = nsDir(ns)
+    ensureRepo(dir)
+    writeFile(dir / (slug & ".org"), content)
+    runGit(dir, @["add", "--", slug & ".org"])
+    discard runGit(dir, @["commit", "-q", "-m", "Update " & slug, "--", slug & ".org"])

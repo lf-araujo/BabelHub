@@ -102,6 +102,27 @@ The gate that makes server execution safe to expose:
   ~BABELHUB_RATE_WINDOW~ seconds, per client IP (X-Forwarded-For aware, for
   behind Caddy); over the limit returns ~429~ with ~Retry-After~.
 
+** GitHub OAuth (per-user identity)
+
+Beyond the shared token, BabelHub can authenticate *individual* users via
+GitHub. Register an OAuth App (callback URL ~<base>/auth/callback~) and set:
+
+#+begin_src sh
+BABELHUB_GH_CLIENT_ID=...  BABELHUB_GH_CLIENT_SECRET=...  \
+  BABELHUB_BASE_URL=https://babelhub.example.com  BABELHUB_EXEC=1 ./babelhub
+#+end_src
+
+The flow is the standard authorization-code dance with a CSRF ~state~:
+~/auth/login~ → GitHub → ~/auth/callback~ sets an httpOnly session cookie;
+~/auth/logout~ ends it; ~GET /api/me~ returns the login. The toolbar shows a
+*Login with GitHub* button (then ~@you~ / logout).
+
+Each logged-in user gets a *private document namespace* — their docs live in a
+per-user git repo under ~$BABELHUB_DATA/<login>/~, separate from everyone else's
+(anonymous use falls back to the shared store). Sessions are in-memory, so a
+restart logs everyone out. With OAuth on, the API requires a session (the shared
+token still works too, if also set).
+
 #+begin_src sh
 BABELHUB_EXEC=1 BABELHUB_TOKEN=$(openssl rand -hex 16) \
   BABELHUB_RATE=30 PORT=8080 ./babelhub
@@ -202,7 +223,8 @@ container-per-block backend later without rework.
 | ~server/exec.nim~   | ephemeral sandboxed execution (Tier 3, opt-in)  |
 | ~server/session.nim~ | persistent session interpreters (R/Python)     |
 | ~server/gate.nim~   | shared-token auth + per-IP rate limiter         |
-| ~src/api.ts~        | token-aware fetch (prompts on 401)              |
+| ~server/oauth.nim~  | GitHub OAuth login + sessions                   |
+| ~src/api.ts~        | token/OAuth-aware fetch, /api/me                 |
 | ~babelhub.nimble~   | one entry point: build/run/install/docker tasks |
 | ~Dockerfile~        | self-contained image build                      |
 | ~server/deploy/~    | systemd unit + Caddyfile for the Hetzner box    |

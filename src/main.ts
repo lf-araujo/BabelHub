@@ -8,6 +8,7 @@ import {
 } from './run';
 import { createEditor, setEditorContent } from './editor';
 import * as store from './storage';
+import { setAuthMode, getMe } from './api.ts';
 import './style.css';
 import sampleOrg from '../public/sample.org?raw';
 
@@ -19,6 +20,7 @@ const docNew = document.querySelector<HTMLButtonElement>('#doc-new')!;
 const docSave = document.querySelector<HTMLButtonElement>('#doc-save')!;
 const docName = document.querySelector<HTMLElement>('#doc-name')!;
 const runMode = document.querySelector<HTMLSelectElement>('#run-mode')!;
+const auth = document.querySelector<HTMLElement>('#auth')!;
 
 setRunStatusHandler((text) => {
   status.textContent = text;
@@ -128,7 +130,30 @@ void refreshList();
 // Once we know the backend's exec capabilities: reveal the browser/session
 // toggle if sessions are available, and re-render so server-only blocks
 // (bash, julia, …) pick up their Run buttons.
+async function renderAuth(oauth: boolean): Promise<void> {
+  auth.replaceChildren();
+  if (!oauth) return;
+  const login = await getMe();
+  if (login) {
+    const me = document.createElement('span');
+    me.className = 'me';
+    me.textContent = '@' + login;
+    const out = document.createElement('a');
+    out.href = '/auth/logout';
+    out.textContent = 'logout';
+    auth.append(me, ' ', out);
+  } else {
+    const a = document.createElement('a');
+    a.className = 'login';
+    a.href = '/auth/login';
+    a.textContent = 'Login with GitHub';
+    auth.append(a);
+  }
+}
+
 void loadExecCaps().then((caps) => {
   if (caps.enabled && caps.sessionLanguages.length > 0) runMode.hidden = false;
+  setAuthMode(caps.oauth ? 'oauth' : caps.authRequired ? 'token' : 'open');
+  void renderAuth(caps.oauth);
   return render();
 });
