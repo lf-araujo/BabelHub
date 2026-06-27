@@ -107,6 +107,20 @@ body {
 }
 .run-result.run-error { background: #2a1414; color: #f3c7c7; }
 
+.run-tables { margin: 0.4rem 0 0.75rem; overflow-x: auto; }
+.run-table {
+  border-collapse: collapse;
+  font-size: 0.82rem;
+  font-family: ui-monospace, monospace;
+}
+.run-table th, .run-table td {
+  border: 1px solid var(--border);
+  padding: 0.2rem 0.55rem;
+  text-align: right;
+}
+.run-table th { background: var(--code-bg); font-weight: 600; }
+.run-table tbody tr:nth-child(even) td { background: #fafaf7; }
+
 .run-plots { margin: 0.4rem 0 0.75rem; }
 .run-plot {
   max-width: 100%;

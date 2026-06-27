@@ -119,9 +119,15 @@ interpreter per (document, language), so state is shared across blocks like a
 Jupyter kernel and like org-babel's ~:session~. A fitted model in one block is
 available in the next; an error doesn't kill the session.
 
+Session results are rich, not just text: *plots* are captured (R graphics
+devices, matplotlib figures) and rendered inline, and a *tabular* last value (an
+R ~data.frame~/matrix or a pandas ~DataFrame~) is returned as a structured table
+and rendered as HTML (capped at 200 rows).
+
 Under the hood each interpreter runs a small driver speaking a length-framed
-protocol over stdin/stdout. ~POST /api/exec~ with an extra ~"session"~ field
-routes to the session for that document. Idle sessions are reaped.
+protocol over stdin/stdout; the reply is JSON ~{output, images, tables}~.
+~POST /api/exec~ with an extra ~"session"~ field routes to the session for that
+document. Idle sessions are reaped.
 
 Runner (~BABELHUB_EXEC_RUNNER~):
 - ~docker~ (default) — the interpreter runs in the same locked-down sandbox as

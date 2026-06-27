@@ -13,9 +13,14 @@ export function setRunStatusHandler(fn: StatusFn): void {
   onStatus = fn;
 }
 
+interface TableData {
+  columns: string[];
+  rows: string[][];
+}
 interface RunResult {
   text: string;
   images: (ImageBitmap | string)[]; // ImageBitmap (webR) or PNG data URL (matplotlib)
+  tables: TableData[]; // tabular results (server data.frame / DataFrame)
 }
 
 // --- R via webR -----------------------------------------------------------
@@ -51,7 +56,7 @@ async function runR(code: string): Promise<RunResult> {
       .map((line) => line.data as string)
       .join('\n')
       .trimEnd();
-    return { text, images };
+    return { text, images, tables: [] };
   } finally {
     shelter.purge();
   }
@@ -115,7 +120,7 @@ async function runPython(code: string): Promise<RunResult> {
     } catch {
       /* matplotlib not used or capture failed — keep the text output */
     }
-    return { text: buf.trimEnd(), images };
+    return { text: buf.trimEnd(), images, tables: [] };
   } finally {
     py.setStdout({});
     py.setStderr({});
@@ -165,9 +170,15 @@ async function postExec(body: Record<string, string>): Promise<RunResult> {
     throw new Error(`rate limited — wait ${retry ?? 'a moment'}s and retry`);
   }
   if (!r.ok) throw new Error(`server exec failed (${r.status})`);
-  const data = (await r.json()) as { ok: boolean; output: string };
+  const data = (await r.json()) as {
+    ok: boolean;
+    output: string;
+    images?: string[];
+    tables?: TableData[];
+  };
   if (!data.ok) throw new Error(data.output);
-  return { text: data.output, images: [] };
+  const images = (data.images ?? []).map((b64) => `data:image/png;base64,${b64}`);
+  return { text: data.output, images, tables: data.tables ?? [] };
 }
 
 const runEphemeral = (lang: string, code: string) => postExec({ lang, code });
@@ -228,6 +239,10 @@ export function attachRunButtons(root: ParentNode): void {
     plots.className = 'run-plots';
     plots.hidden = true;
 
+    const tableBox = document.createElement('div');
+    tableBox.className = 'run-tables';
+    tableBox.hidden = true;
+
     button.addEventListener('click', async () => {
       button.disabled = true;
       const original = button.textContent;
@@ -240,16 +255,19 @@ export function attachRunButtons(root: ParentNode): void {
             : kind === 'session'
             ? (s: string) => runSession(lang, s)
             : (s: string) => runEphemeral(lang, s);
-        const { text, images } = await exec(src);
-        result.textContent = text || (images.length ? '' : '(no output)');
+        const { text, images, tables } = await exec(src);
+        const hasVisual = images.length > 0 || tables.length > 0;
+        result.textContent = text || (hasVisual ? '' : '(no output)');
         result.hidden = text.length === 0;
         result.classList.remove('run-error');
         renderPlots(plots, images);
+        renderTables(tableBox, tables);
       } catch (err) {
         result.textContent = String(err);
         result.hidden = false;
         result.classList.add('run-error');
         renderPlots(plots, []);
+        renderTables(tableBox, []);
       } finally {
         button.disabled = false;
         button.textContent = original;
@@ -259,7 +277,30 @@ export function attachRunButtons(root: ParentNode): void {
     pre.insertAdjacentElement('beforebegin', button);
     pre.insertAdjacentElement('afterend', result);
     result.insertAdjacentElement('afterend', plots);
+    plots.insertAdjacentElement('afterend', tableBox);
   }
+}
+
+/** Render tabular results (server data.frame / DataFrame) as HTML tables. */
+function renderTables(container: HTMLElement, tables: TableData[]): void {
+  container.replaceChildren();
+  for (const t of tables) {
+    const table = document.createElement('table');
+    table.className = 'run-table';
+    const thead = table.createTHead().insertRow();
+    for (const col of t.columns) {
+      const th = document.createElement('th');
+      th.textContent = col;
+      thead.appendChild(th);
+    }
+    const tbody = table.createTBody();
+    for (const row of t.rows) {
+      const tr = tbody.insertRow();
+      for (const cell of row) tr.insertCell().textContent = cell;
+    }
+    container.appendChild(table);
+  }
+  container.hidden = tables.length === 0;
 }
 
 /** Paint captured plots — canvases for webR ImageBitmaps, <img> for PNG URLs. */

@@ -108,15 +108,19 @@ proc handleApi(req: Request, route: string) {.async, gcsafe.} =
     except CatchableError:
       await req.respond(Http400, """{"error":"bad request body"}""", baseHeaders(jsonType))
       return
-    var ok: bool
-    var output: string
     if sess.len > 0 and lang in sessionLanguages():
       # Persistent session: shared state across blocks (one interpreter).
-      (ok, output) = sessionExec(sess, lang, code)
+      # Driver payload is JSON {output, images, tables}; just stamp ok onto it.
+      let (ok, payload) = sessionExec(sess, lang, code)
+      var node = parseJson(payload)
+      node["ok"] = %ok
+      await req.respond(Http200, $node, baseHeaders(jsonType))
     else:
-      # Ephemeral: throwaway container per block.
-      (ok, output) = await runBlock(lang, code)
-    await req.respond(Http200, $(%*{"ok": ok, "output": output}), baseHeaders(jsonType))
+      # Ephemeral: throwaway container per block (text only).
+      let (ok, output) = await runBlock(lang, code)
+      let node = %*{"ok": ok, "output": output,
+                    "images": newSeq[string](), "tables": newSeq[string]()}
+      await req.respond(Http200, $node, baseHeaders(jsonType))
     return
 
   if route == "/api/exec":
