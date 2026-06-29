@@ -19,16 +19,39 @@ import sandbox
 
 type LangSpec = object
   image: string
-  argv: seq[string] # interpreter invocation; the block's code arrives on stdin
+  argv: seq[string]   # interpreter invocation; the block's code arrives on stdin
+  extra: seq[string]  # extra docker flags (e.g. a license mount)
 
-let registry = {
-  "sh":         LangSpec(image: "alpine:3",     argv: @["sh", "-s"]),
-  "shell":      LangSpec(image: "alpine:3",     argv: @["sh", "-s"]),
-  "bash":       LangSpec(image: "bash:5",       argv: @["bash", "-s"]),
-  "julia":      LangSpec(image: "julia:1",      argv: @["julia", "/dev/stdin"]),
-  "js":         LangSpec(image: "node:20-slim", argv: @["node", "/dev/stdin"]),
-  "javascript": LangSpec(image: "node:20-slim", argv: @["node", "/dev/stdin"]),
-}.toTable
+# Stata is proprietary — there's no public image and it needs a license, so it's
+# only offered when the operator points BABELHUB_STATA_IMAGE at their own image.
+# The license `stata.lic` is mounted read-only into the install dir at run time
+# (BABELHUB_STATA_LICENSE -> BABELHUB_STATA_LICPATH); the block's code is run as a
+# batch do-file and its .log streamed back.
+proc stataSpec(): LangSpec =
+  let cmd = getEnv("BABELHUB_STATA_CMD", "stata")
+  result = LangSpec(
+    image: getEnv("BABELHUB_STATA_IMAGE", ""),
+    argv: @["sh", "-c",
+      "cat > /tmp/bh.do; " & cmd &
+      " -b do /tmp/bh.do </dev/null >/dev/null 2>&1 || true; cat /tmp/bh.log 2>/dev/null"],
+  )
+  let lic = getEnv("BABELHUB_STATA_LICENSE", "")
+  if lic.len > 0:
+    result.extra = @["-v", lic & ":" &
+      getEnv("BABELHUB_STATA_LICPATH", "/usr/local/stata18/stata.lic") & ":ro"]
+
+let registry = block:
+  var r = {
+    "sh":         LangSpec(image: "alpine:3",     argv: @["sh", "-s"]),
+    "shell":      LangSpec(image: "alpine:3",     argv: @["sh", "-s"]),
+    "bash":       LangSpec(image: "bash:5",       argv: @["bash", "-s"]),
+    "julia":      LangSpec(image: "julia:1",      argv: @["julia", "/dev/stdin"]),
+    "js":         LangSpec(image: "node:20-slim", argv: @["node", "/dev/stdin"]),
+    "javascript": LangSpec(image: "node:20-slim", argv: @["node", "/dev/stdin"]),
+  }.toTable
+  if getEnv("BABELHUB_STATA_IMAGE", "").len > 0:
+    r["stata"] = stataSpec()
+  r
 
 let
   cfgEnabled = getEnv("BABELHUB_EXEC", "") == "1"
@@ -72,7 +95,7 @@ proc runBlock*(session, lang, code: string): Future[tuple[ok: bool, output: stri
       "--read-only", "--tmpfs", "/tmp:size=64m", # immutable rootfs + scratch
       "--cap-drop", "ALL",
       "--security-opt", "no-new-privileges",
-    ] & mountFlags(session) & @[  # allowlisted mounts + /work scratch dir
+    ] & mountFlags(session) & spec.extra & @[ # mounts + /work + any license mount
       spec.image,
     ] & spec.argv
 
