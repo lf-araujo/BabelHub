@@ -47,6 +47,7 @@ body {
 .auth { font-size: 0.8rem; }
 .auth .me { color: var(--accent); font-weight: 600; }
 .auth a { color: var(--accent); }
+.license { font-size: 0.72rem; color: var(--accent); }
 
 #panes {
   display: grid;

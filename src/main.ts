@@ -8,7 +8,7 @@ import {
 } from './run';
 import { createEditor, setEditorContent } from './editor';
 import * as store from './storage';
-import { setAuthMode, getMe } from './api.ts';
+import { setAuthMode, getMe, getLicense } from './api.ts';
 import './style.css';
 import sampleOrg from '../public/sample.org?raw';
 
@@ -21,6 +21,13 @@ const docSave = document.querySelector<HTMLButtonElement>('#doc-save')!;
 const docName = document.querySelector<HTMLElement>('#doc-name')!;
 const runMode = document.querySelector<HTMLSelectElement>('#run-mode')!;
 const auth = document.querySelector<HTMLElement>('#auth')!;
+const licenseBadge = document.querySelector<HTMLElement>('#license')!;
+
+void getLicense().then((l) => {
+  if (!l.licensed) return;
+  licenseBadge.textContent = '● licensed';
+  licenseBadge.title = `Licensed to ${l.sub ?? ''}${l.tier ? ' · ' + l.tier : ''}`;
+});
 
 setRunStatusHandler((text) => {
   status.textContent = text;

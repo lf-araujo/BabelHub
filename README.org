@@ -228,6 +228,8 @@ container-per-block backend later without rework.
 | ~server/session.nim~ | persistent session interpreters (R/Python)     |
 | ~server/gate.nim~   | shared-token auth + per-IP rate limiter         |
 | ~server/oauth.nim~  | GitHub OAuth login + sessions                   |
+| ~server/license.nim~ | offline Ed25519 license verification (paid gate) |
+| ~tools/~            | license keypair + token generators (issuer-side) |
 | ~src/api.ts~        | token/OAuth-aware fetch, /api/me                 |
 | ~babelhub.nimble~   | one entry point: build/run/install/docker tasks |
 | ~Dockerfile~        | self-contained image build                      |
@@ -259,6 +261,47 @@ Sequenced cheapest-first, each step independently shippable.
 ** Endgame
 - [ ] BYOC orchestration: run blocks in the customer's *own* cloud account
 - [ ] Compliant workbench plugging into All of Us / ABCD enclaves
+
+* Commercial license & activation
+
+Server-side execution (containers + persistent sessions — the parts that cost
+real compute) is the *paid* tier. It unlocks with a valid license; without one,
+BabelHub runs community mode (client-side webR/Pyodide only) and ~/api/exec~
+returns ~402~.
+
+A license is an *Ed25519-signed token* verified *offline* — the binary embeds
+the issuer's public key, so there's no license server and no phone-home. The
+code is AGPL and visible; the license is the supported, paid path (the same
+signed-token pattern as fastsem).
+
+Activate a self-hosted instance:
+
+#+begin_src sh
+BABELHUB_EXEC=1 BABELHUB_LICENSE="<token>" ./babelhub      # or BABELHUB_LICENSE_FILE=...
+#+end_src
+
+The toolbar shows a ~● licensed~ badge; ~GET /api/license~ reports status.
+
+** Issuing licenses
+
+#+begin_src sh
+tools/license-keygen.sh                 # once: make the keypair; embed the printed
+                                        # public key in server/license.nim, keep the
+                                        # private key secret (gitignored, never commit)
+
+tools/licensegen.sh babelhub-license.key "Acme Lab" team 0 exec,sessions
+# -> a signed token; send it to the customer (exp 0 = perpetual)
+#+end_src
+
+** Selling with Stripe
+
+No Stripe code lives in the binary — keep it that way. Create a Stripe *Payment
+Link* (or Product) per tier; on payment, issue a key and deliver it:
+- *Manual (start here):* a paid Stripe notification → run ~licensegen.sh~ → email
+  the token. Zero infra.
+- *Automated (later):* a tiny fulfillment endpoint takes the Stripe webhook,
+  runs ~licensegen.sh~, and emails the token. The signing key stays off the web
+  server.
 
 * License
 

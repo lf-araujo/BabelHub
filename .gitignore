@@ -14,3 +14,8 @@ nimcache/
 
 # stray R default plot device output
 Rplots.pdf
+
+# license issuer PRIVATE key and license tokens — NEVER commit
+*.pem
+babelhub-license.key
+*.license

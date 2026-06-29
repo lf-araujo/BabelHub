@@ -12,6 +12,23 @@ export function setAuthMode(mode: 'open' | 'token' | 'oauth'): void {
   authMode = mode;
 }
 
+export interface LicenseStatus {
+  licensed: boolean;
+  sub?: string;
+  tier?: string;
+}
+
+/** Server license status (for the activation badge). */
+export async function getLicense(): Promise<LicenseStatus> {
+  try {
+    const r = await fetch('/api/license');
+    if (r.ok) return (await r.json()) as LicenseStatus;
+  } catch {
+    /* ignore */
+  }
+  return { licensed: false };
+}
+
 /** Current GitHub login, or '' when anonymous / not in OAuth mode. */
 export async function getMe(): Promise<string> {
   try {

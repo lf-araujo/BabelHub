@@ -9,7 +9,7 @@
 ## (Caddy) sits in front; this process speaks plain HTTP on $PORT.
 
 import std/[asynchttpserver, asyncdispatch, os, strutils, tables, json, uri]
-import storage, exec, session, gate, oauth
+import storage, exec, session, gate, oauth, license
 
 const distDir = normalizedPath(currentSourcePath().parentDir / ".." / "dist")
 
@@ -98,8 +98,10 @@ proc queryParam(query, key: string): string =
 proc handleApi(req: Request, route: string) {.async, gcsafe.} =
   # Public capability probe, so the frontend can learn auth/exec state up front.
   if route == "/api/exec" and req.reqMethod == HttpGet:
+    # Server execution requires both the operator opt-in and a valid license.
     let caps = %*{
-      "enabled": execEnabled(),
+      "enabled": execEnabled() and licenseAllows("exec"),
+      "licensed": licensed(),
       "authRequired": authRequired() or oauthEnabled(),
       "oauth": oauthEnabled(),
       "languages": ephemeralLanguages(),
@@ -111,6 +113,11 @@ proc handleApi(req: Request, route: string) {.async, gcsafe.} =
   # Public: who am I? Returns the GitHub login, or "" when anonymous.
   if route == "/api/me" and req.reqMethod == HttpGet:
     await req.respond(Http200, $(%*{"login": currentUser(req)}), baseHeaders(jsonType))
+    return
+
+  # Public: license status (for a status badge).
+  if route == "/api/license" and req.reqMethod == HttpGet:
+    await req.respond(Http200, licenseJson(), baseHeaders(jsonType))
     return
 
   # Everything else requires auth when a token or OAuth is configured.
@@ -129,6 +136,11 @@ proc handleApi(req: Request, route: string) {.async, gcsafe.} =
     if not execEnabled():
       await req.respond(Http403, """{"error":"server execution disabled"}""",
                         baseHeaders(jsonType))
+      return
+    if not licenseAllows("exec"):
+      await req.respond(Http402,
+        """{"error":"server execution requires a commercial license"}""",
+        baseHeaders(jsonType))
       return
     if not rateAllow(clientKey(req)):
       var h = baseHeaders(jsonType)
