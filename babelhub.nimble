@@ -13,7 +13,7 @@
 version       = "0.0.1"
 author        = "Luis De Araujo"
 description    = "BabelHub — org-mode with live R, served as one static binary"
-license       = "MIT"
+license       = "AGPL-3.0-or-later"
 srcDir        = "server"
 bin           = @["babelhub"]
 

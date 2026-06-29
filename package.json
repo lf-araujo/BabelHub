@@ -2,6 +2,7 @@
   "name": "babelhub",
   "private": true,
   "version": "0.0.1",
+  "license": "AGPL-3.0-or-later",
   "type": "module",
   "description": "An Overleaf for Emacs org-mode: render org files in the browser with live, client-side R execution.",
   "scripts": {

@@ -259,3 +259,12 @@ Sequenced cheapest-first, each step independently shippable.
 ** Endgame
 - [ ] BYOC orchestration: run blocks in the customer's *own* cloud account
 - [ ] Compliant workbench plugging into All of Us / ABCD enclaves
+
+* License
+
+Open-core. The code in this repository is licensed under the *GNU AGPLv3* (see
+[[file:LICENSE][LICENSE]]): you can self-host, study, and modify it freely, and if you run a
+modified version as a network service you must share your changes. Hosted
+operation, team/collaboration features, and the compliance/governance layer are
+the commercial offering built on top. For a commercial license (to use the core
+without AGPL obligations), contact the author.
