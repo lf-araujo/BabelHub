@@ -140,14 +140,19 @@ repeat {
   plotdir <- tempfile(); dir.create(plotdir)
   grDevices::png(file.path(plotdir, "p%03d.png"), width = 720, height = 540, res = 96)
   tbl <- NULL
-  out <- capture.output(tryCatch({
-    exprs <- parse(text = code); n <- length(exprs)
-    if (n > 0) for (i in seq_len(n)) {
-      rv <- withVisible(eval(exprs[[i]], globalenv()))
-      if (i == n && rv$visible && (is.data.frame(rv$value) || is.matrix(rv$value))) tbl <- rv$value
-      else if (rv$visible) print(rv$value)
-    }
-  }, error = function(e) cat("Error:", conditionMessage(e), "\n")))
+  out <- capture.output(withCallingHandlers(
+    tryCatch({
+      exprs <- parse(text = code); n <- length(exprs)
+      if (n > 0) for (i in seq_len(n)) {
+        rv <- withVisible(eval(exprs[[i]], globalenv()))
+        if (i == n && rv$visible && (is.data.frame(rv$value) || is.matrix(rv$value))) tbl <- rv$value
+        else if (rv$visible) print(rv$value)
+      }
+    }, error = function(e) cat("Error:", conditionMessage(e), "\n")),
+    # surface messages/warnings/startup messages (they go to stderr otherwise)
+    message = function(m) { cat(conditionMessage(m)); invokeRestart("muffleMessage") },
+    warning = function(w) { cat("Warning: ", conditionMessage(w), "\n", sep = ""); invokeRestart("muffleWarning") }
+  ))
   tryCatch(grDevices::dev.off(), error = function(e) NULL)
   files <- sort(list.files(plotdir, pattern = "\\.png$", full.names = TRUE))
   sz <- file.info(files)$size; files <- files[!is.na(sz) & sz > 0]
