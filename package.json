@@ -10,7 +10,9 @@
     "build": "tsc && vite build",
     "preview": "vite preview",
     "probe": "node --experimental-strip-types scripts/probe.ts",
-    "report-test": "node --experimental-strip-types scripts/report-test.ts"
+    "report-test": "node --experimental-strip-types scripts/report-test.ts",
+    "exports-test": "node --experimental-strip-types scripts/exports-test.ts",
+    "toc-test": "node --experimental-strip-types scripts/toc-test.ts"
   },
   "dependencies": {
     "@codemirror/autocomplete": "^6.20.3",

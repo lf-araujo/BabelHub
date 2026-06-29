@@ -46,17 +46,55 @@ async function runR(code: string): Promise<RunResult> {
     // withAutoprint makes top-level visible values print like a REPL would.
     // captureConditions:false lets R errors surface as thrown exceptions (our
     // catch renders them). captureGraphics is on by default: plots land in `images`.
-    const { output, images } = await shelter.captureR(code, {
+    const { output, images, result } = await shelter.captureR(code, {
       withAutoprint: true,
       captureStreams: true,
       captureConditions: false,
     });
-    const text = output
+    let text = output
       .filter((line) => line.type === 'stdout' || line.type === 'stderr')
       .map((line) => line.data as string)
       .join('\n')
       .trimEnd();
-    return { text, images, tables: [] };
+
+    // If the block's value is a data.frame, also render it as a structured
+    // table — and drop its text print when that was the only output. Fully
+    // defensive: any shape mismatch just leaves the text as-is, no table.
+    let tables: TableData[] = [];
+    try {
+      await webR.objs.globalEnv.bind('.bh_last', result);
+      const isDf =
+        ((await (await shelter.evalR('is.data.frame(.bh_last)')).toJs()) as { values?: unknown[] })
+          ?.values?.[0] === true;
+      if (isDf) {
+        const conv = await shelter.evalR(
+          'as.data.frame(lapply(.bh_last, function(x) trimws(format(x))),' +
+            ' stringsAsFactors=FALSE, check.names=FALSE)'
+        );
+        const js = (await conv.toJs()) as { names?: string[]; values?: Array<{ values?: unknown[] }> };
+        const columns = js.names ?? [];
+        const cols = (js.values ?? []).map((v) => v.values ?? []);
+        const nrow = cols.length ? cols[0].length : 0;
+        const rows: string[][] = [];
+        for (let i = 0; i < nrow; i++) rows.push(cols.map((c) => String(c[i] ?? '')));
+        tables = [{ columns, rows }];
+
+        const printed = await shelter.captureR('print(.bh_last)', {
+          withAutoprint: false,
+          captureStreams: true,
+        });
+        const printedText = printed.output
+          .filter((l) => l.type === 'stdout' || l.type === 'stderr')
+          .map((l) => l.data as string)
+          .join('\n')
+          .trimEnd();
+        if (text === printedText) text = '';
+      }
+    } catch {
+      /* not a data frame, or webR object shape differs — keep text, no table */
+    }
+
+    return { text, images, tables };
   } finally {
     shelter.purge();
   }
@@ -83,6 +121,19 @@ function getPyodide(): Promise<PyodideInterface> {
   return pyodidePromise;
 }
 
+// If the last value is a pandas DataFrame, return it as {columns, rows} JSON
+// (capped at 200 rows); otherwise "" so the caller prints the value's repr.
+const PY_TABLE = `
+import json as _json
+def _bh_table(v):
+    if v.__class__.__name__ == 'DataFrame' and hasattr(v, 'columns') and hasattr(v, 'values'):
+        return _json.dumps({"columns": [str(c) for c in list(v.columns)],
+                            "rows": [["" if c is None else str(c) for c in r]
+                                     for r in v.values.tolist()[:200]]})
+    return ""
+_bh_table(_bh_last)
+`;
+
 // Run after user code: if matplotlib was used, return open figures as base64 PNGs.
 const MPL_CAPTURE = `
 import sys, io, base64
@@ -106,9 +157,22 @@ async function runPython(code: string): Promise<RunResult> {
   try {
     await py.loadPackagesFromImports(code); // auto-load numpy/pandas/matplotlib/…
     const result = await py.runPythonAsync(code);
+    let tables: TableData[] = [];
     if (result !== undefined && result !== null) {
-      const repr = String(result);
-      if (repr) buf += repr + '\n';
+      // DataFrame → structured table; otherwise print the value's repr. Defensive.
+      try {
+        py.globals.set('_bh_last', result);
+        const tj = await py.runPythonAsync(PY_TABLE);
+        const json = typeof tj === 'string' ? tj : '';
+        if (json) tables = [JSON.parse(json) as TableData];
+        else {
+          const repr = String(result);
+          if (repr) buf += repr + '\n';
+        }
+      } catch {
+        const repr = String(result);
+        if (repr) buf += repr + '\n';
+      }
       (result as { destroy?: () => void })?.destroy?.();
     }
     let images: (ImageBitmap | string)[] = [];
@@ -120,7 +184,7 @@ async function runPython(code: string): Promise<RunResult> {
     } catch {
       /* matplotlib not used or capture failed — keep the text output */
     }
-    return { text: buf.trimEnd(), images, tables: [] };
+    return { text: buf.trimEnd(), images, tables };
   } finally {
     py.setStdout({});
     py.setStderr({});
@@ -230,6 +294,9 @@ export function attachRunButtons(root: ParentNode): void {
 
     const pre = code.parentElement as HTMLElement;
     if (pre.dataset.runnable) continue; // idempotent across re-renders
+    // Honor :exports — code/none suppress results, so no Run button is attached.
+    const exportsMode = pre.dataset.exports ?? 'both';
+    if (exportsMode === 'code' || exportsMode === 'none') continue;
     pre.dataset.runnable = 'true';
 
     const button = document.createElement('button');

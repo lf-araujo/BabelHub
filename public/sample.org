@@ -2,6 +2,8 @@
 #+PROPERTY: header-args:R :session *R* :results output
 #+PROPERTY: header-args:python :session *py* :results output
 
+* TOC
+
 * Welcome to BabelHub
 
 This is an org-mode document rendered live in your browser. Edit the source on

@@ -6,7 +6,9 @@ import { defineConfig } from 'vite';
 // fallback channel, but isolation keeps R execution snappy.
 const crossOriginIsolation = {
   'Cross-Origin-Opener-Policy': 'same-origin',
-  'Cross-Origin-Embedder-Policy': 'require-corp',
+  // credentialless (not require-corp) keeps SharedArrayBuffer for webR/Pyodide
+  // while allowing cross-origin subresources like Google Fonts to load.
+  'Cross-Origin-Embedder-Policy': 'credentialless',
 };
 
 export default defineConfig({

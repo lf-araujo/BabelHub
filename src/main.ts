@@ -10,6 +10,8 @@ import { createEditor, setEditorContent } from './editor';
 import * as store from './storage';
 import { setAuthMode, getMe, getLicense } from './api.ts';
 import { exportReport } from './report.ts';
+import { applyExports } from './exports.ts';
+import { applyToc } from './toc.ts';
 import './style.css';
 import sampleOrg from '../public/sample.org?raw';
 
@@ -57,6 +59,8 @@ function showName(): void {
 
 async function render(): Promise<void> {
   preview.innerHTML = await renderOrg(current);
+  applyExports(preview, current); // tag blocks before attaching Run buttons
+  applyToc(preview, current); // prepend a TOC if the doc asks for one
   attachRunButtons(preview);
 }
 

@@ -54,8 +54,10 @@ proc baseHeaders(ctype: string): HttpHeaders =
   newHttpHeaders({
     "Content-Type": ctype,
     # Cross-origin isolation — required for webR's SharedArrayBuffer channel.
+    # credentialless (not require-corp) also lets cross-origin subresources
+    # (Google Fonts, CDN runtimes) load without a CORP header.
     "Cross-Origin-Opener-Policy": "same-origin",
-    "Cross-Origin-Embedder-Policy": "require-corp",
+    "Cross-Origin-Embedder-Policy": "credentialless",
   })
 
 const jsonType = "application/json"
