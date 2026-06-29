@@ -13,7 +13,7 @@ export function setRunStatusHandler(fn: StatusFn): void {
   onStatus = fn;
 }
 
-interface TableData {
+export interface TableData {
   columns: string[];
   rows: string[][];
 }
@@ -291,7 +291,7 @@ export function attachRunButtons(root: ParentNode): void {
 }
 
 /** Render tabular results (server data.frame / DataFrame) as HTML tables. */
-function renderTables(container: HTMLElement, tables: TableData[]): void {
+export function renderTables(container: HTMLElement, tables: TableData[]): void {
   container.replaceChildren();
   for (const t of tables) {
     const table = document.createElement('table');

@@ -28,6 +28,12 @@ a git-backed store on the server and commits it, so you get version history for
 free. Storage lives under ~$BABELHUB_DATA~ (default ~./data~); the server needs
 ~git~ on the host.
 
+*Export* downloads a single self-contained ~.html~ report of the rendered
+preview — text, plots, and tables all embedded (images as data URLs, styles
+inline), no external assets. (Structured HTML tables come from *server* runs of
+an R ~data.frame~/matrix or pandas ~DataFrame~; client-side webR/Pyodide print a
+data frame as text.)
+
 Heavier code (compiled R packages, non-Python/R languages, long jobs) isn't
 runnable client-side — that's the boundary with the future containerised-
 execution paid tier.
@@ -220,6 +226,7 @@ container-per-block backend later without rework.
 | ~src/editor.ts~     | CodeMirror + org StreamLanguage highlighter     |
 | ~src/srcedit.ts~    | dedicated per-language block editor (Ctrl-')    |
 | ~src/storage.ts~    | client for the /api document store              |
+| ~src/report.ts~     | self-contained HTML report export               |
 | ~public/sample.org~ | demo document loaded on first paint             |
 | ~scripts/probe.ts~  | jsdom verification of the render+run wiring      |
 | ~server/babelhub.nim~ | Nim server; embeds dist/ → single binary      |

@@ -9,6 +9,7 @@ import {
 import { createEditor, setEditorContent } from './editor';
 import * as store from './storage';
 import { setAuthMode, getMe, getLicense } from './api.ts';
+import { exportReport } from './report.ts';
 import './style.css';
 import sampleOrg from '../public/sample.org?raw';
 
@@ -18,6 +19,7 @@ const status = document.querySelector<HTMLElement>('#webr-status')!;
 const docList = document.querySelector<HTMLSelectElement>('#doc-list')!;
 const docNew = document.querySelector<HTMLButtonElement>('#doc-new')!;
 const docSave = document.querySelector<HTMLButtonElement>('#doc-save')!;
+const docExport = document.querySelector<HTMLButtonElement>('#doc-export')!;
 const docName = document.querySelector<HTMLElement>('#doc-name')!;
 const runMode = document.querySelector<HTMLSelectElement>('#run-mode')!;
 const auth = document.querySelector<HTMLElement>('#auth')!;
@@ -100,6 +102,11 @@ docNew.addEventListener('click', () => {
   dirty = false;
   showName();
   void render();
+});
+
+docExport.addEventListener('click', () => {
+  const titled = current.match(/^#\+TITLE:\s*(.+)$/im)?.[1].trim();
+  exportReport(preview, titled || currentSlug || 'BabelHub report');
 });
 
 docSave.addEventListener('click', async () => {
