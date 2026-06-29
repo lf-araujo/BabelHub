@@ -10,7 +10,10 @@ cost, by running them client-side via [[https://webr.r-wasm.org][webR]].
 
 A split-pane web app:
 
-- *Left*: a [[https://codemirror.net/][CodeMirror 6]] editor with a lightweight org-mode highlighter.
+- *Left*: a [[https://codemirror.net/][CodeMirror 6]] editor with a lightweight org-mode highlighter. Press
+  *Ctrl/⌘-'* inside a source block to open it in a dedicated editor with that
+  language's highlighting and completion (the browser analog of Emacs ~C-c '~) —
+  Python/JS via Lezer grammars, R/bash/Julia via legacy modes; loaded lazily.
 - *Right*: a live preview, parsed by [[https://github.com/rasmusbe/uniorg][uniorg]] (the same parser model as
   org-element.el — we don't roll our own).
 - R and Python source blocks each get a *▶ Run* button. R runs via [[https://webr.r-wasm.org][webR]] and
@@ -215,6 +218,7 @@ container-per-block backend later without rework.
 | ~src/run.ts~        | lazy webR boot + Run-button wiring              |
 | ~src/main.ts~       | editor ↔ debounced render ↔ buttons             |
 | ~src/editor.ts~     | CodeMirror + org StreamLanguage highlighter     |
+| ~src/srcedit.ts~    | dedicated per-language block editor (Ctrl-')    |
 | ~src/storage.ts~    | client for the /api document store              |
 | ~public/sample.org~ | demo document loaded on first paint             |
 | ~scripts/probe.ts~  | jsdom verification of the render+run wiring      |

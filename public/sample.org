@@ -13,6 +13,10 @@ server nothing. The =#+PROPERTY: header-args= lines above set a shared
 ~:session~ per language, so when you open this file in Emacs the blocks run in
 one persistent session too.
 
+Tip: put the cursor inside any source block and press *Ctrl/⌘-'* to open it in a
+dedicated editor with that language's highlighting and completion (like Emacs
+=C-c '=); Ctrl/⌘-↵ applies, Esc cancels.
+
 ** A first computation
 
 #+begin_src R

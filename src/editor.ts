@@ -1,5 +1,6 @@
 import { EditorView, basicSetup } from 'codemirror';
 import { EditorState } from '@codemirror/state';
+import { keymap } from '@codemirror/view';
 import {
   StreamLanguage,
   type StreamParser,
@@ -92,6 +93,18 @@ export function createEditor(
     state: EditorState.create({
       doc,
       extensions: [
+        // Mod-' opens the block at the cursor in a dedicated language editor
+        // (browser analog of Emacs C-c '). The editor + language grammars are
+        // loaded lazily on first use to keep the initial bundle small.
+        keymap.of([
+          {
+            key: "Mod-'",
+            run: (v) => {
+              void import('./srcedit.ts').then((m) => m.openSrcEdit(v));
+              return true;
+            },
+          },
+        ]),
         basicSetup,
         orgLanguage,
         syntaxHighlighting(orgHighlight),

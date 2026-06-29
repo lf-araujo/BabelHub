@@ -110,6 +110,44 @@ body {
 }
 .run-result.run-error { background: #2a1414; color: #f3c7c7; }
 
+/* dedicated source-block editor (Mod-' / org-edit-special) */
+.srcedit-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(20, 20, 18, 0.45);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 100;
+}
+.srcedit-panel {
+  width: min(80ch, 90vw);
+  height: 70vh;
+  background: #fff;
+  border-radius: 8px;
+  box-shadow: 0 10px 40px rgba(0, 0, 0, 0.3);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+.srcedit-bar {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 0.4rem 0.9rem;
+  border-bottom: 1px solid var(--border);
+  background: var(--code-bg);
+  font-size: 0.8rem;
+}
+.srcedit-bar strong { color: var(--accent); }
+.srcedit-bar .hint { color: var(--muted); }
+.srcedit-host { flex: 1; min-height: 0; overflow: auto; }
+.srcedit-host .cm-editor { height: 100%; }
+.srcedit-host .cm-scroller {
+  font-family: ui-monospace, "Cascadia Code", "Fira Code", monospace;
+  font-size: 0.9rem;
+}
+
 .run-tables { margin: 0.4rem 0 0.75rem; overflow-x: auto; }
 .run-table {
   border-collapse: collapse;
