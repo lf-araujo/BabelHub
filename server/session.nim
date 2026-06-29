@@ -14,6 +14,7 @@
 
 import std/[osproc, os, strutils, tables, asyncdispatch, streams, times,
             selectors, posix, json]
+import sandbox
 
 # --- drivers (each block: text output, captured plots, and tabular results) --
 const pyDriver = """
@@ -194,7 +195,7 @@ proc sessionLanguages*(): seq[string] {.gcsafe.} =
 proc errorJson(msg: string): string =
   $(%*{"output": msg, "images": newSeq[string](), "tables": newSeq[string]()})
 
-proc spawn(spec: DriverSpec): Process =
+proc spawn(spec: DriverSpec, session: string): Process =
   if cfgRunnerDocker:
     inc nameSeq
     let name = "bh-sess-" & $int(epochTime()) & "-" & $nameSeq
@@ -207,11 +208,14 @@ proc spawn(spec: DriverSpec): Process =
       "--read-only", "--tmpfs", "/tmp:size=64m", "--tmpfs", "/home:size=16m",
       "-e", "HOME=/tmp",
       "--cap-drop", "ALL", "--security-opt", "no-new-privileges",
-    ]
+    ] & mountFlags(session) # allowlisted mounts + the /work scratch dir
     startProcess("docker", args = flags & @[spec.image] & spec.argv,
                  options = {poUsePath})
   else:
-    startProcess(spec.argv[0], args = spec.argv[1 .. ^1], options = {poUsePath})
+    # Local runner: the work dir is the cwd, so relative file IO is shared
+    # across this document's blocks (same as /work under docker).
+    startProcess(spec.argv[0], args = spec.argv[1 .. ^1],
+                 workingDir = workDir(session), options = {poUsePath})
 
 proc closeSession(key: string, s: Session) =
   try:
@@ -259,7 +263,7 @@ proc sessionExec*(sessionId, lang, code: string): (bool, string) {.gcsafe.} =
       if sessions.len >= cfgMaxSessions:
         return (false, errorJson("too many live sessions (limit " & $cfgMaxSessions & ")"))
       try:
-        s = Session(p: spawn(drivers[lang]), lang: lang, lastUsed: epochTime())
+        s = Session(p: spawn(drivers[lang], sessionId), lang: lang, lastUsed: epochTime())
       except CatchableError:
         return (false, errorJson("could not start session: " & getCurrentExceptionMsg()))
       sessions[key] = s

@@ -15,6 +15,7 @@
 ## the host must have them pre-pulled — see `nimble images`.
 
 import std/[osproc, os, strutils, tables, asyncdispatch, streams, json, times]
+import sandbox
 
 type LangSpec = object
   image: string
@@ -50,7 +51,7 @@ proc ephemeralLanguages*(): seq[string] {.gcsafe.} =
   {.cast(gcsafe).}:
     for k in registry.keys: result.add k
 
-proc runBlock*(lang, code: string): Future[tuple[ok: bool, output: string]] {.async, gcsafe.} =
+proc runBlock*(session, lang, code: string): Future[tuple[ok: bool, output: string]] {.async, gcsafe.} =
   {.cast(gcsafe).}:
     if not registry.hasKey(lang):
       return (false, "unsupported language: " & lang)
@@ -71,6 +72,7 @@ proc runBlock*(lang, code: string): Future[tuple[ok: bool, output: string]] {.as
       "--read-only", "--tmpfs", "/tmp:size=64m", # immutable rootfs + scratch
       "--cap-drop", "ALL",
       "--security-opt", "no-new-privileges",
+    ] & mountFlags(session) & @[  # allowlisted mounts + /work scratch dir
       spec.image,
     ] & spec.argv
 

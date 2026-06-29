@@ -9,7 +9,7 @@
 ## (Caddy) sits in front; this process speaks plain HTTP on $PORT.
 
 import std/[asynchttpserver, asyncdispatch, os, strutils, tables, json, uri]
-import storage, exec, session, gate, oauth, license
+import storage, exec, session, gate, oauth, license, sandbox
 
 const distDir = normalizedPath(currentSourcePath().parentDir / ".." / "dist")
 
@@ -156,6 +156,8 @@ proc handleApi(req: Request, route: string) {.async, gcsafe.} =
     except CatchableError:
       await req.respond(Http400, """{"error":"bad request body"}""", baseHeaders(jsonType))
       return
+    # Log any `#@require` directives for IT to audit/provision (who/what/when).
+    audit(currentUser(req), sess, lang, code)
     if sess.len > 0 and lang in sessionLanguages():
       # Persistent session: shared state across blocks (one interpreter).
       # Driver payload is JSON {output, images, tables}; just stamp ok onto it.
@@ -165,7 +167,7 @@ proc handleApi(req: Request, route: string) {.async, gcsafe.} =
       await req.respond(Http200, $node, baseHeaders(jsonType))
     else:
       # Ephemeral: throwaway container per block (text only).
-      let (ok, output) = await runBlock(lang, code)
+      let (ok, output) = await runBlock(sess, lang, code)
       let node = %*{"ok": ok, "output": output,
                     "images": newSeq[string](), "tables": newSeq[string]()}
       await req.respond(Http200, $node, baseHeaders(jsonType))

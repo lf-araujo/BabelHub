@@ -189,7 +189,8 @@ async function postExec(body: Record<string, string>): Promise<RunResult> {
   return { text: data.output, images, tables: data.tables ?? [] };
 }
 
-const runEphemeral = (lang: string, code: string) => postExec({ lang, code });
+const runEphemeral = (lang: string, code: string) =>
+  postExec({ lang, code, session: sessionId() }); // session keys the /work dir
 const runSession = (lang: string, code: string) =>
   postExec({ lang, code, session: sessionId() });
 

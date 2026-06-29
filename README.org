@@ -229,6 +229,7 @@ container-per-block backend later without rework.
 | ~server/gate.nim~   | shared-token auth + per-IP rate limiter         |
 | ~server/oauth.nim~  | GitHub OAuth login + sessions                   |
 | ~server/license.nim~ | offline Ed25519 license verification (paid gate) |
+| ~server/sandbox.nim~ | /work scratch, allowlisted mounts, #@require audit |
 | ~tools/~            | license keypair + token generators (issuer-side) |
 | ~src/api.ts~        | token/OAuth-aware fetch, /api/me                 |
 | ~babelhub.nimble~   | one entry point: build/run/install/docker tasks |
@@ -261,6 +262,40 @@ Sequenced cheapest-first, each step independently shippable.
 ** Endgame
 - [ ] BYOC orchestration: run blocks in the customer's *own* cloud account
 - [ ] Compliant workbench plugging into All of Us / ABCD enclaves
+
+* Shared workspace & resource requests
+
+** Passing data between blocks
+Every server-run block of a document shares a scratch directory — mounted at
+~/work~ (and the working dir) under docker, and the working dir under the local
+runner. So one block's results are visible to the next, *across languages*:
+R writes ~cars.csv~, a Python block reads it. It's keyed by the document
+(session), so ~/work~ is shared by all of a document's blocks regardless of
+interpreter. (Persistent R/Python sessions also keep in-memory state; ~/work~ is
+how data crosses languages and survives ephemeral containers.)
+
+** Allowlisted mounts + audit log (governance)
+IT controls what server-run code can see. Datasets and shared package libraries
+are exposed read-only via an allowlist:
+
+#+begin_src sh
+BABELHUB_MOUNTS="/srv/cran:/opt/Rlib:ro;/data/abcd:/data/abcd:ro" ./babelhub
+#+end_src
+
+Users *request* anything not yet provisioned with a ~#@require~ directive in a
+block (works in any ~#~-comment language):
+
+#+begin_src R
+#@require /data/abcd          # a dataset path
+#@require cran:survival       # a package to install
+#+end_src
+
+Every ~#@require~ is appended to an audit log (~BABELHUB_AUDIT_LOG~, default
+~$BABELHUB_DATA/audit.log~) as JSONL — ~{ts, user, session, lang, resource,
+status}~ where status is ~available~ (covered by a mount) or ~pending~ (IT must
+add the mount / install the package). IT tails the log, sees the pending
+requests, provisions per request, and they flip to available. This is the
+auditable, request-driven access model the compliant-workbench endgame needs.
 
 * Commercial license & activation
 

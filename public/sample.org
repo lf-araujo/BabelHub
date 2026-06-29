@@ -77,6 +77,29 @@ echo "running in a sandboxed container as $(whoami)"
 uname -sm
 #+end_src
 
+** Shared workspace + requesting resources (server tiers)
+
+Server-run blocks of one document share a ~/work~ directory, so results pass
+between blocks — even across languages (R writes, Python reads):
+
+#+begin_src R
+write.csv(head(mtcars), "cars.csv")
+#+end_src
+
+#+begin_src python
+import csv
+print(open("cars.csv").read()[:80])
+#+end_src
+
+Need a dataset or a package that isn't installed yet? Declare it with
+~#@require~ — it's logged for IT to audit and provision per request:
+
+#+begin_src R
+#@require /data/abcd
+#@require cran:survival
+library(survival)
+#+end_src
+
 * What's next
 
 - [X] CodeMirror editor with org syntax highlighting
