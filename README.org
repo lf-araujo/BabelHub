@@ -1,12 +1,9 @@
 #+TITLE: BabelHub
 #+SUBTITLE: An Overleaf for Emacs org-mode
 
-BabelHub renders org-mode documents in the browser and makes their source
-blocks *runnable*. The wedge: do the one thing a GitHub-rendered org file
-structurally cannot — execute ~#+begin_src R~ blocks — at zero marginal server
-cost, by running them client-side via [[https://webr.r-wasm.org][webR]].
+BabelHub is a workbench for scientific computing in contexts where data is protected. The usual use case are statistical analyses using data sets governed by data protection law, like the 100mi Brazilians, All of Us, and ABCD datasets. The tool is designed to support compliance with Brazil's LGPD, the US HIPAA Privacy Rule, and dataset-specific rules such as the ABCD Study's current requirement that analysis happen inside an approved, contained environment rather than on downloaded copies. Analyses are run in containerized, persistent per-session environments so data never has to leave the sandbox. The tool is language agnostic and distributed in a single binary, reports are deterministically generated and analyses pipelines can be version controlled using git.
 
-* Status: Tier-1 MVP
+* Status: MVP
 
 A split-pane web app:
 
@@ -41,8 +38,8 @@ control what shows in the preview and report — per block
 BabelHub defaults to ~both~.
 
 Heavier code (compiled R packages, non-Python/R languages, long jobs) isn't
-runnable client-side — that's the boundary with the future containerised-
-execution paid tier.
+runnable client-side — that's the boundary with the containerised-execution
+paid tier below.
 
 The whole thing ships as a *single static Nim binary*: ~src/server~ embeds the
 built frontend at compile time, so deployment is one ~scp~ — no Node, no
@@ -80,7 +77,7 @@ without it the editor still works as a scratch pad.
 
 Slugs are ~[A-Za-z0-9_-]{1,64}~ (which also blocks path traversal).
 
-* Container execution (Tier 3 — opt-in)
+* Container execution (opt-in)
 
 For languages webR/Pyodide can't run (bash, julia, node, …), the backend can
 execute a block in an ephemeral, sandboxed container and stream back the output.
@@ -197,13 +194,9 @@ Runner (~BABELHUB_EXEC_RUNNER~):
 - ~local~ — the interpreter runs directly on the host (no isolation). Fine for a
   single trusted user; this is what the driver tests exercise.
 
-Config knobs: ~BABELHUB_EXEC~, ~BABELHUB_EXEC_RUNNER~, ~BABELHUB_EXEC_TIMEOUT~,
-~BABELHUB_EXEC_MEM~, ~BABELHUB_EXEC_CPUS~, ~BABELHUB_EXEC_MAX~ (ephemeral
-concurrency), ~BABELHUB_SESSION_MAX~ (live sessions), ~BABELHUB_SESSION_IDLE~
-(idle reap, seconds), ~BABELHUB_TOKEN~ (shared auth token),
-~BABELHUB_RATE~ / ~BABELHUB_RATE_WINDOW~ (exec rate limit), and the Stata knobs
-(~BABELHUB_STATA_IMAGE~, ~BABELHUB_STATA_CMD~, ~BABELHUB_STATA_LICENSE~,
-~BABELHUB_STATA_LICPATH~).
+For the full list of config env vars (execution, sessions, auth, Stata, mounts,
+licensing), run ~./babelhub --help~ — it's the source of truth, kept next to
+the code that reads them.
 
 * Ship it (single binary)
 
@@ -245,9 +238,9 @@ compile) so it needs no host toolchain. For an even smaller =scratch= image,
 ~nimble staticbin~ builds a fully-static musl binary.
 
 Note: this containerises *BabelHub itself*. Running each org *code block* in its
-own container is the separate Tier-3 execution backend — today's R blocks run
-client-side in webR (no container), and this design leaves room to add the
-container-per-block backend later without rework.
+own container is the separate execution backend described above — today's R
+blocks run client-side in webR (no container), and this design leaves room to
+add the container-per-block backend later without rework.
 
 * Layout
 
@@ -264,7 +257,7 @@ container-per-block backend later without rework.
 | ~scripts/probe.ts~  | jsdom verification of the render+run wiring      |
 | ~server/babelhub.nim~ | Nim server; embeds dist/ → single binary      |
 | ~server/storage.nim~ | git-backed document store + API                |
-| ~server/exec.nim~   | ephemeral sandboxed execution (Tier 3, opt-in)  |
+| ~server/exec.nim~   | ephemeral sandboxed execution (opt-in)          |
 | ~server/session.nim~ | persistent session interpreters (R/Python)     |
 | ~server/gate.nim~   | shared-token auth + per-IP rate limiter         |
 | ~server/oauth.nim~  | GitHub OAuth login + sessions                   |
@@ -275,33 +268,6 @@ container-per-block backend later without rework.
 | ~babelhub.nimble~   | one entry point: build/run/install/docker tasks |
 | ~Dockerfile~        | self-contained image build                      |
 | ~server/deploy/~    | systemd unit + Caddyfile for the Hetzner box    |
-
-* Roadmap
-
-Sequenced cheapest-first, each step independently shippable.
-
-** Tier 1 — free, near-zero server cost (this MVP)
-- [X] uniorg render + webR Run buttons
-- [X] CodeMirror editor surface with org highlighting
-- [X] Capture and inline plots (webR graphics device → canvas)
-- [X] Single static Nim binary serving the embedded site
-- [X] Save/load documents via git-backed storage
-- [X] Python execution via Pyodide (stdout + matplotlib figures)
-- [ ] Org-aware diff view (heading/subtree level, not line-based)
-
-** Tier 2 — still serverless-ish
-- [ ] Export-as-a-service via GitHub Actions (PDF/Beamer/HTML; GitHub's compute)
-- [ ] Org-aware diff bot posting PR comments
-
-** Tier 3 — paid, real backend (Nim)
-- [ ] Single static Nim binary (Jester/Prologue) on Hetzner CX23 + Caddy TLS
-- [ ] GitHub OAuth, Stripe billing, Git-backed storage + Postgres metadata
-- [ ] Containerised, scale-to-zero execution for heavy/compiled workloads
-      (fastsem, Nim, R packages webR can't reach), billed per-second
-
-** Endgame
-- [ ] BYOC orchestration: run blocks in the customer's *own* cloud account
-- [ ] Compliant workbench plugging into All of Us / ABCD enclaves
 
 * Shared workspace & resource requests
 
@@ -335,7 +301,7 @@ Every ~#@require~ is appended to an audit log (~BABELHUB_AUDIT_LOG~, default
 status}~ where status is ~available~ (covered by a mount) or ~pending~ (IT must
 add the mount / install the package). IT tails the log, sees the pending
 requests, provisions per request, and they flip to available. This is the
-auditable, request-driven access model the compliant-workbench endgame needs.
+auditable, request-driven access model the compliance/governance layer needs.
 
 * Commercial license & activation
 

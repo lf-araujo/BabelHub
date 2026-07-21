@@ -246,7 +246,59 @@ proc handle(req: Request) {.async, gcsafe.} =
   else:
     await req.respond(Http404, "Not found\n", baseHeaders("text/plain"))
 
+const usage = """
+BabelHub — org-mode workbench server.
+
+Usage: babelhub [-h | --help]
+
+  PORT                        HTTP port to listen on (default 8080)
+  BABELHUB_DATA                Document storage + work dir root (default ./data)
+
+Auth & rate limiting:
+  BABELHUB_TOKEN                Shared bearer token gating the API (default: open)
+  BABELHUB_RATE                 Requests per window for exec (default 30)
+  BABELHUB_RATE_WINDOW          Rate limit window, seconds (default 60)
+
+GitHub OAuth (per-user identity):
+  BABELHUB_GH_CLIENT_ID
+  BABELHUB_GH_CLIENT_SECRET
+  BABELHUB_BASE_URL             Public base URL for the OAuth callback
+                                 (default http://localhost:8080)
+
+Container execution (opt-in, BABELHUB_EXEC=1):
+  BABELHUB_EXEC                  Enable container/session execution (default off)
+  BABELHUB_EXEC_RUNNER            docker (default) | local
+  BABELHUB_EXEC_TIMEOUT           Per-run timeout, seconds (default 30)
+  BABELHUB_EXEC_MEM               Memory cap (default 256m)
+  BABELHUB_EXEC_CPUS              CPU cap (default 1.0)
+  BABELHUB_EXEC_MAX               Concurrent ephemeral runs (default 4)
+  BABELHUB_SESSION_MAX            Concurrent persistent sessions (default 16)
+  BABELHUB_SESSION_IDLE           Idle session reap, seconds (default 900)
+
+Shared workspace & governance:
+  BABELHUB_MOUNTS                 Allowlisted read-only mounts,
+                                   "host:container:ro;host2:container2:ro"
+  BABELHUB_WORK                    Shared /work scratch dir
+                                   (default $BABELHUB_DATA/work)
+  BABELHUB_AUDIT_LOG               #@require audit log path
+                                   (default $BABELHUB_DATA/audit.log)
+
+Stata (container language, bring your own image + license):
+  BABELHUB_STATA_IMAGE
+  BABELHUB_STATA_CMD               (default stata)
+  BABELHUB_STATA_LICENSE
+  BABELHUB_STATA_LICPATH           (default /usr/local/stata18/stata.lic)
+
+Commercial license (unlocks server-side execution):
+  BABELHUB_LICENSE
+  BABELHUB_LICENSE_FILE
+"""
+
 when isMainModule:
+  for arg in commandLineParams():
+    if arg in ["-h", "--help"]:
+      stdout.write usage
+      quit 0
   if embedded.len == 0:
     stderr.writeLine "No embedded assets — run `npm run build` before compiling."
     quit 1
